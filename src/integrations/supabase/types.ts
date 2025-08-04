@@ -14,7 +14,158 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      sessions: {
+        Row: {
+          car_info: string | null
+          created_at: string
+          date: string | null
+          driver_name: string | null
+          id: string
+          name: string
+          session_type: string
+          track_name: string | null
+          updated_at: string
+          user_id: string
+          weather_conditions: string | null
+        }
+        Insert: {
+          car_info?: string | null
+          created_at?: string
+          date?: string | null
+          driver_name?: string | null
+          id?: string
+          name: string
+          session_type: string
+          track_name?: string | null
+          updated_at?: string
+          user_id: string
+          weather_conditions?: string | null
+        }
+        Update: {
+          car_info?: string | null
+          created_at?: string
+          date?: string | null
+          driver_name?: string | null
+          id?: string
+          name?: string
+          session_type?: string
+          track_name?: string | null
+          updated_at?: string
+          user_id?: string
+          weather_conditions?: string | null
+        }
+        Relationships: []
+      }
+      telemetry_data: {
+        Row: {
+          brake_pressure: number | null
+          created_at: string
+          delta_time: number | null
+          file_id: string
+          gear: number | null
+          id: string
+          lap_number: number | null
+          latitude: number | null
+          longitude: number | null
+          rpm: number | null
+          sector_time: number | null
+          session_id: string
+          speed: number | null
+          throttle_position: number | null
+          time_seconds: number | null
+        }
+        Insert: {
+          brake_pressure?: number | null
+          created_at?: string
+          delta_time?: number | null
+          file_id: string
+          gear?: number | null
+          id?: string
+          lap_number?: number | null
+          latitude?: number | null
+          longitude?: number | null
+          rpm?: number | null
+          sector_time?: number | null
+          session_id: string
+          speed?: number | null
+          throttle_position?: number | null
+          time_seconds?: number | null
+        }
+        Update: {
+          brake_pressure?: number | null
+          created_at?: string
+          delta_time?: number | null
+          file_id?: string
+          gear?: number | null
+          id?: string
+          lap_number?: number | null
+          latitude?: number | null
+          longitude?: number | null
+          rpm?: number | null
+          sector_time?: number | null
+          session_id?: string
+          speed?: number | null
+          throttle_position?: number | null
+          time_seconds?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "telemetry_data_file_id_fkey"
+            columns: ["file_id"]
+            isOneToOne: false
+            referencedRelation: "uploaded_files"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "telemetry_data_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      uploaded_files: {
+        Row: {
+          created_at: string
+          file_name: string
+          file_path: string
+          file_size: number | null
+          id: string
+          session_id: string
+          upload_status: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          file_name: string
+          file_path: string
+          file_size?: number | null
+          id?: string
+          session_id: string
+          upload_status?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          file_name?: string
+          file_path?: string
+          file_size?: number | null
+          id?: string
+          session_id?: string
+          upload_status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "uploaded_files_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
