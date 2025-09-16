@@ -109,7 +109,7 @@ const Dashboard = () => {
             session_type: sessionType,
             track_name: trackName,
             date: new Date().toISOString().split('T')[0],
-            driver_name: user?.email?.split('@')[0] || 'Unknown Driver',
+            driver_name: profile?.full_name || user?.email?.split('@')[0] || 'Unknown Driver',
             car_info: ''
           }
         ])
@@ -131,6 +131,52 @@ const Dashboard = () => {
         variant: "destructive",
       });
     }
+  };
+
+  const handleFileUpload = async (sessionId: string) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.csv,.txt,.log';
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+
+      toast({
+        title: "Upload Started",
+        description: `Uploading ${file.name}...`,
+      });
+
+      try {
+        // For now, just record the file info - actual telemetry processing would be implemented later
+        const { error } = await supabase
+          .from('uploaded_files')
+          .insert([
+            {
+              session_id: sessionId,
+              user_id: user?.id,
+              file_name: file.name,
+              file_path: `${sessionId}/${file.name}`,
+              file_size: file.size,
+              upload_status: 'completed'
+            }
+          ]);
+
+        if (error) throw error;
+
+        toast({
+          title: "Upload Complete",
+          description: `${file.name} uploaded successfully.`,
+        });
+      } catch (error) {
+        console.error('Error uploading file:', error);
+        toast({
+          title: "Upload Failed", 
+          description: "Failed to upload file. Please try again.",
+          variant: "destructive",
+        });
+      }
+    };
+    input.click();
   };
 
   const getRoleColor = (role: string) => {
@@ -305,7 +351,7 @@ const Dashboard = () => {
                     </div>
                   </div>
                   <div className="mt-4 flex space-x-2">
-                    <Button size="sm" variant="outline" className="flex-1">
+                    <Button size="sm" variant="outline" className="flex-1" onClick={() => handleFileUpload(session.id)}>
                       <Upload className="h-3 w-3 mr-1" />
                       Upload Data
                     </Button>
