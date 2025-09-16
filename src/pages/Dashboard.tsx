@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -18,16 +19,58 @@ interface Session {
   created_at: string;
 }
 
+interface Profile {
+  id: string;
+  email: string;
+  full_name: string;
+  role: string;
+  team_name?: string;
+}
+
 const Dashboard = () => {
   const { user, signOut } = useAuth();
+  const navigate = useNavigate();
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (user) {
-      fetchSessions();
+    if (!user) {
+      navigate('/auth');
+      return;
     }
-  }, [user]);
+    fetchUserData();
+  }, [user, navigate]);
+
+  const fetchUserData = async () => {
+    try {
+      await Promise.all([fetchProfile(), fetchSessions()]);
+    } catch (error) {
+      console.error('Error fetching user data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchProfile = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user?.id)
+        .single();
+
+      if (error) throw error;
+      setProfile(data);
+    } catch (error) {
+      console.error('Error fetching profile:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load profile data",
+        variant: "destructive",
+      });
+    }
+  };
 
   const fetchSessions = async () => {
     try {
@@ -46,8 +89,6 @@ const Dashboard = () => {
         description: "Failed to load sessions",
         variant: "destructive",
       });
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -138,9 +179,9 @@ const Dashboard = () => {
             </div>
             <div className="flex items-center space-x-4">
               <div className="text-right">
-                <p className="text-sm font-medium">{user?.email}</p>
-                <Badge variant="outline" className="bg-blue-500/20 text-blue-400 border-blue-500/30">
-                  DRIVER
+                <p className="text-sm font-medium">{profile?.full_name || user?.email}</p>
+                <Badge variant="outline" className={getRoleColor(profile?.role || 'driver')}>
+                  {profile?.role?.toUpperCase().replace('_', ' ') || 'DRIVER'}
                 </Badge>
               </div>
               <Button variant="outline" onClick={signOut}>
@@ -157,7 +198,7 @@ const Dashboard = () => {
         {/* Welcome Section */}
         <div className="mb-8">
           <h2 className="text-3xl font-bold mb-2">
-            Welcome back, Driver
+            Welcome back, {profile?.full_name?.split(' ')[0] || 'Driver'}
           </h2>
           <p className="text-muted-foreground mb-6">
             Analyze your racing performance with professional-grade telemetry tools.
