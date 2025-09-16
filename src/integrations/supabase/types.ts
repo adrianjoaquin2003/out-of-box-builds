@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      profiles: {
+        Row: {
+          created_at: string
+          email: string
+          full_name: string
+          id: string
+          role: Database["public"]["Enums"]["user_role"]
+          team_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          full_name: string
+          id: string
+          role?: Database["public"]["Enums"]["user_role"]
+          team_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          full_name?: string
+          id?: string
+          role?: Database["public"]["Enums"]["user_role"]
+          team_name?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       sessions: {
         Row: {
           car_info: string | null
@@ -186,7 +216,7 @@ export type Database = {
         | "handyman"
         | "other"
       job_status: "open" | "in_progress" | "completed" | "cancelled"
-      user_role: "customer" | "professional" | "admin"
+      user_role: "driver" | "engineer" | "team_manager"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -327,7 +357,7 @@ export const Constants = {
         "other",
       ],
       job_status: ["open", "in_progress", "completed", "cancelled"],
-      user_role: ["customer", "professional", "admin"],
+      user_role: ["driver", "engineer", "team_manager"],
     },
   },
 } as const
