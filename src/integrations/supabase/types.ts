@@ -88,72 +88,159 @@ export type Database = {
       }
       telemetry_data: {
         Row: {
-          brake_pressure: number | null
+          airbox_temperature: number | null
+          bat_volts_dash: number | null
+          bat_volts_ecu: number | null
+          boost_pressure: number | null
+          comms_rs232_2_diag: number | null
+          coolant_temperature: number | null
+          cpu_usage: number | null
           created_at: string
-          delta_time: number | null
+          dash_temp: number | null
+          device_up_time: number | null
+          drive_speed: number | null
+          engine_oil_pressure: number | null
+          engine_oil_temperature: number | null
+          engine_speed: number | null
           file_id: string
+          fuel_inj_primary_duty_cycle: number | null
+          fuel_pressure_sensor: number | null
+          fuel_temperature: number | null
+          fuel_used_m1: number | null
+          g_force_lat: number | null
+          g_force_long: number | null
+          g_force_vert: number | null
           gear: number | null
+          gear_detect_value: number | null
+          gps_altitude: number | null
+          gps_date: string | null
+          gps_heading: number | null
+          gps_latitude: number | null
+          gps_longitude: number | null
+          gps_sats_used: number | null
+          gps_speed: number | null
+          gps_time: string | null
+          ground_speed: number | null
           id: string
+          ignition_timing: number | null
+          inlet_air_temperature: number | null
+          inlet_manifold_pressure: number | null
+          lap_distance: number | null
+          lap_gain_loss_running: number | null
           lap_number: number | null
-          latitude: number | null
-          longitude: number | null
-          rpm: number | null
-          sector_time: number | null
+          lap_time: number | null
+          lap_time_predicted: number | null
+          reference_lap_time: number | null
+          running_lap_time: number | null
           session_id: string
-          speed: number | null
+          throttle_pedal: number | null
           throttle_position: number | null
-          time_seconds: number | null
+          time: number | null
+          trip_distance: number | null
         }
         Insert: {
-          brake_pressure?: number | null
+          airbox_temperature?: number | null
+          bat_volts_dash?: number | null
+          bat_volts_ecu?: number | null
+          boost_pressure?: number | null
+          comms_rs232_2_diag?: number | null
+          coolant_temperature?: number | null
+          cpu_usage?: number | null
           created_at?: string
-          delta_time?: number | null
+          dash_temp?: number | null
+          device_up_time?: number | null
+          drive_speed?: number | null
+          engine_oil_pressure?: number | null
+          engine_oil_temperature?: number | null
+          engine_speed?: number | null
           file_id: string
+          fuel_inj_primary_duty_cycle?: number | null
+          fuel_pressure_sensor?: number | null
+          fuel_temperature?: number | null
+          fuel_used_m1?: number | null
+          g_force_lat?: number | null
+          g_force_long?: number | null
+          g_force_vert?: number | null
           gear?: number | null
+          gear_detect_value?: number | null
+          gps_altitude?: number | null
+          gps_date?: string | null
+          gps_heading?: number | null
+          gps_latitude?: number | null
+          gps_longitude?: number | null
+          gps_sats_used?: number | null
+          gps_speed?: number | null
+          gps_time?: string | null
+          ground_speed?: number | null
           id?: string
+          ignition_timing?: number | null
+          inlet_air_temperature?: number | null
+          inlet_manifold_pressure?: number | null
+          lap_distance?: number | null
+          lap_gain_loss_running?: number | null
           lap_number?: number | null
-          latitude?: number | null
-          longitude?: number | null
-          rpm?: number | null
-          sector_time?: number | null
+          lap_time?: number | null
+          lap_time_predicted?: number | null
+          reference_lap_time?: number | null
+          running_lap_time?: number | null
           session_id: string
-          speed?: number | null
+          throttle_pedal?: number | null
           throttle_position?: number | null
-          time_seconds?: number | null
+          time?: number | null
+          trip_distance?: number | null
         }
         Update: {
-          brake_pressure?: number | null
+          airbox_temperature?: number | null
+          bat_volts_dash?: number | null
+          bat_volts_ecu?: number | null
+          boost_pressure?: number | null
+          comms_rs232_2_diag?: number | null
+          coolant_temperature?: number | null
+          cpu_usage?: number | null
           created_at?: string
-          delta_time?: number | null
+          dash_temp?: number | null
+          device_up_time?: number | null
+          drive_speed?: number | null
+          engine_oil_pressure?: number | null
+          engine_oil_temperature?: number | null
+          engine_speed?: number | null
           file_id?: string
+          fuel_inj_primary_duty_cycle?: number | null
+          fuel_pressure_sensor?: number | null
+          fuel_temperature?: number | null
+          fuel_used_m1?: number | null
+          g_force_lat?: number | null
+          g_force_long?: number | null
+          g_force_vert?: number | null
           gear?: number | null
+          gear_detect_value?: number | null
+          gps_altitude?: number | null
+          gps_date?: string | null
+          gps_heading?: number | null
+          gps_latitude?: number | null
+          gps_longitude?: number | null
+          gps_sats_used?: number | null
+          gps_speed?: number | null
+          gps_time?: string | null
+          ground_speed?: number | null
           id?: string
+          ignition_timing?: number | null
+          inlet_air_temperature?: number | null
+          inlet_manifold_pressure?: number | null
+          lap_distance?: number | null
+          lap_gain_loss_running?: number | null
           lap_number?: number | null
-          latitude?: number | null
-          longitude?: number | null
-          rpm?: number | null
-          sector_time?: number | null
+          lap_time?: number | null
+          lap_time_predicted?: number | null
+          reference_lap_time?: number | null
+          running_lap_time?: number | null
           session_id?: string
-          speed?: number | null
+          throttle_pedal?: number | null
           throttle_position?: number | null
-          time_seconds?: number | null
+          time?: number | null
+          trip_distance?: number | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "telemetry_data_file_id_fkey"
-            columns: ["file_id"]
-            isOneToOne: false
-            referencedRelation: "uploaded_files"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "telemetry_data_session_id_fkey"
-            columns: ["session_id"]
-            isOneToOne: false
-            referencedRelation: "sessions"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       uploaded_files: {
         Row: {

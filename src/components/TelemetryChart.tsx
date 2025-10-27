@@ -28,7 +28,7 @@ export const TelemetryChart = ({ sessionId }: TelemetryChartProps) => {
         .from('telemetry_data')
         .select('*')
         .eq('session_id', sessionId)
-        .order('time_seconds', { ascending: true })
+        .order('time', { ascending: true })
         .limit(1000); // Limit to prevent overwhelming the chart
 
       if (error) throw error;
@@ -36,9 +36,9 @@ export const TelemetryChart = ({ sessionId }: TelemetryChartProps) => {
       if (telemetry && telemetry.length > 0) {
         setData(telemetry);
         
-        // Calculate statistics
-        const speeds = telemetry.map(t => t.speed || 0).filter(s => s > 0);
-        const rpms = telemetry.map(t => t.rpm || 0).filter(r => r > 0);
+        // Calculate statistics - use ground_speed or gps_speed
+        const speeds = telemetry.map(t => t.ground_speed || t.gps_speed || 0).filter(s => s > 0);
+        const rpms = telemetry.map(t => t.engine_speed || 0).filter(r => r > 0);
         const laps = new Set(telemetry.map(t => t.lap_number).filter(l => l !== null));
         
         setStats({
@@ -117,7 +117,7 @@ export const TelemetryChart = ({ sessionId }: TelemetryChartProps) => {
             <LineChart data={data}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis 
-                dataKey="time_seconds" 
+                dataKey="time" 
                 label={{ value: 'Time (seconds)', position: 'insideBottom', offset: -5 }}
               />
               <YAxis label={{ value: 'Speed (km/h)', angle: -90, position: 'insideLeft' }} />
@@ -125,7 +125,8 @@ export const TelemetryChart = ({ sessionId }: TelemetryChartProps) => {
               <Legend />
               <Line 
                 type="monotone" 
-                dataKey="speed" 
+                dataKey="ground_speed" 
+                name="Speed"
                 stroke="hsl(var(--primary))" 
                 dot={false}
                 strokeWidth={2}
@@ -136,7 +137,7 @@ export const TelemetryChart = ({ sessionId }: TelemetryChartProps) => {
       </Card>
 
       {/* RPM Chart */}
-      {data.some(d => d.rpm) && (
+      {data.some(d => d.engine_speed) && (
         <Card>
           <CardHeader>
             <CardTitle>Engine RPM</CardTitle>
@@ -147,7 +148,7 @@ export const TelemetryChart = ({ sessionId }: TelemetryChartProps) => {
               <LineChart data={data}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis 
-                  dataKey="time_seconds" 
+                  dataKey="time" 
                   label={{ value: 'Time (seconds)', position: 'insideBottom', offset: -5 }}
                 />
                 <YAxis label={{ value: 'RPM', angle: -90, position: 'insideLeft' }} />
@@ -155,7 +156,8 @@ export const TelemetryChart = ({ sessionId }: TelemetryChartProps) => {
                 <Legend />
                 <Line 
                   type="monotone" 
-                  dataKey="rpm" 
+                  dataKey="engine_speed" 
+                  name="Engine RPM"
                   stroke="hsl(var(--chart-2))" 
                   dot={false}
                   strokeWidth={2}
@@ -166,39 +168,39 @@ export const TelemetryChart = ({ sessionId }: TelemetryChartProps) => {
         </Card>
       )}
 
-      {/* Throttle & Brake Chart */}
-      {(data.some(d => d.throttle_position) || data.some(d => d.brake_pressure)) && (
+      {/* Throttle & G-Force Chart */}
+      {(data.some(d => d.throttle_position) || data.some(d => d.g_force_lat)) && (
         <Card>
           <CardHeader>
-            <CardTitle>Throttle & Brake Input</CardTitle>
-            <CardDescription>Driver inputs over time</CardDescription>
+            <CardTitle>Throttle & G-Forces</CardTitle>
+            <CardDescription>Driver inputs and forces over time</CardDescription>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={data}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis 
-                  dataKey="time_seconds" 
+                  dataKey="time" 
                   label={{ value: 'Time (seconds)', position: 'insideBottom', offset: -5 }}
                 />
-                <YAxis label={{ value: 'Input %', angle: -90, position: 'insideLeft' }} />
+                <YAxis label={{ value: 'Value', angle: -90, position: 'insideLeft' }} />
                 <Tooltip />
                 <Legend />
                 {data.some(d => d.throttle_position) && (
                   <Line 
                     type="monotone" 
                     dataKey="throttle_position" 
-                    name="Throttle" 
+                    name="Throttle %" 
                     stroke="hsl(var(--chart-3))" 
                     dot={false}
                     strokeWidth={2}
                   />
                 )}
-                {data.some(d => d.brake_pressure) && (
+                {data.some(d => d.g_force_lat) && (
                   <Line 
                     type="monotone" 
-                    dataKey="brake_pressure" 
-                    name="Brake" 
+                    dataKey="g_force_lat" 
+                    name="Lateral G" 
                     stroke="hsl(var(--chart-4))" 
                     dot={false}
                     strokeWidth={2}
