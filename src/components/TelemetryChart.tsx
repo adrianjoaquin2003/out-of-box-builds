@@ -110,36 +110,34 @@ export const TelemetryChart = ({ sessionId }: TelemetryChartProps) => {
       <Card>
         <CardHeader>
           <CardTitle>Speed Over Time</CardTitle>
-          <CardDescription>Telemetry visualization - scroll to see all data</CardDescription>
+          <CardDescription>Telemetry visualization - scroll horizontally to see all data</CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <div style={{ minWidth: `${data.length * 2}px`, width: '100%' }}>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={data}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis 
-                    dataKey="time" 
-                    label={{ value: 'Time (seconds)', position: 'insideBottom', offset: -5 }}
-                    domain={[0, 'dataMax']}
-                  />
-                  <YAxis 
-                    label={{ value: 'Speed (km/h)', angle: -90, position: 'insideLeft' }}
-                    domain={[0, 'auto']}
-                  />
-                  <Tooltip />
-                  <Legend />
-                  <Line 
-                    type="monotone" 
-                    dataKey="ground_speed" 
-                    name="Speed"
-                    stroke="hsl(var(--primary))" 
-                    dot={false}
-                    strokeWidth={2}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
+        <CardContent className="overflow-x-auto">
+          <div style={{ minWidth: Math.max(800, data.length * 1.5) + 'px' }}>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={data}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis 
+                  dataKey="time" 
+                  label={{ value: 'Time (seconds)', position: 'insideBottom', offset: -5 }}
+                  domain={[0, 'dataMax']}
+                />
+                <YAxis 
+                  label={{ value: 'Speed (km/h)', angle: -90, position: 'insideLeft' }}
+                  domain={[0, 'auto']}
+                />
+                <Tooltip />
+                <Legend />
+                <Line 
+                  type="monotone" 
+                  dataKey="ground_speed" 
+                  name="Speed"
+                  stroke="hsl(var(--primary))" 
+                  dot={false}
+                  strokeWidth={2}
+                />
+              </LineChart>
+            </ResponsiveContainer>
           </div>
         </CardContent>
       </Card>
@@ -149,36 +147,34 @@ export const TelemetryChart = ({ sessionId }: TelemetryChartProps) => {
         <Card>
           <CardHeader>
             <CardTitle>Engine RPM</CardTitle>
-            <CardDescription>RPM telemetry - scroll to see all data</CardDescription>
+            <CardDescription>RPM telemetry - scroll horizontally to see all data</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <div style={{ minWidth: `${data.length * 2}px`, width: '100%' }}>
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={data}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis 
-                      dataKey="time" 
-                      label={{ value: 'Time (seconds)', position: 'insideBottom', offset: -5 }}
-                      domain={[0, 'dataMax']}
-                    />
-                    <YAxis 
-                      label={{ value: 'RPM', angle: -90, position: 'insideLeft' }}
-                      domain={[0, 'auto']}
-                    />
-                    <Tooltip />
-                    <Legend />
-                    <Line 
-                      type="monotone" 
-                      dataKey="engine_speed" 
-                      name="Engine RPM"
-                      stroke="hsl(var(--chart-2))" 
-                      dot={false}
-                      strokeWidth={2}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
+          <CardContent className="overflow-x-auto">
+            <div style={{ minWidth: Math.max(800, data.length * 1.5) + 'px' }}>
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={data}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis 
+                    dataKey="time" 
+                    label={{ value: 'Time (seconds)', position: 'insideBottom', offset: -5 }}
+                    domain={[0, 'dataMax']}
+                  />
+                  <YAxis 
+                    label={{ value: 'RPM', angle: -90, position: 'insideLeft' }}
+                    domain={[0, 'auto']}
+                  />
+                  <Tooltip />
+                  <Legend />
+                  <Line 
+                    type="monotone" 
+                    dataKey="engine_speed" 
+                    name="Engine RPM"
+                    stroke="hsl(var(--chart-2))" 
+                    dot={false}
+                    strokeWidth={2}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
             </div>
           </CardContent>
         </Card>
@@ -189,48 +185,46 @@ export const TelemetryChart = ({ sessionId }: TelemetryChartProps) => {
         <Card>
           <CardHeader>
             <CardTitle>Throttle & G-Forces</CardTitle>
-            <CardDescription>Driver inputs and forces over time - scroll to see all data</CardDescription>
+            <CardDescription>Driver inputs and forces over time - scroll horizontally to see all data</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <div style={{ minWidth: `${data.length * 2}px`, width: '100%' }}>
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={data}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis 
-                      dataKey="time" 
-                      label={{ value: 'Time (seconds)', position: 'insideBottom', offset: -5 }}
-                      domain={[0, 'dataMax']}
+          <CardContent className="overflow-x-auto">
+            <div style={{ minWidth: Math.max(800, data.length * 1.5) + 'px' }}>
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={data}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis 
+                    dataKey="time" 
+                    label={{ value: 'Time (seconds)', position: 'insideBottom', offset: -5 }}
+                    domain={[0, 'dataMax']}
+                  />
+                  <YAxis 
+                    label={{ value: 'Value', angle: -90, position: 'insideLeft' }}
+                    domain={['auto', 'auto']}
+                  />
+                  <Tooltip />
+                  <Legend />
+                  {data.some(d => d.throttle_position) && (
+                    <Line 
+                      type="monotone" 
+                      dataKey="throttle_position" 
+                      name="Throttle %" 
+                      stroke="hsl(var(--chart-3))" 
+                      dot={false}
+                      strokeWidth={2}
                     />
-                    <YAxis 
-                      label={{ value: 'Value', angle: -90, position: 'insideLeft' }}
-                      domain={['auto', 'auto']}
+                  )}
+                  {data.some(d => d.g_force_lat) && (
+                    <Line 
+                      type="monotone" 
+                      dataKey="g_force_lat" 
+                      name="Lateral G" 
+                      stroke="hsl(var(--chart-4))" 
+                      dot={false}
+                      strokeWidth={2}
                     />
-                    <Tooltip />
-                    <Legend />
-                    {data.some(d => d.throttle_position) && (
-                      <Line 
-                        type="monotone" 
-                        dataKey="throttle_position" 
-                        name="Throttle %" 
-                        stroke="hsl(var(--chart-3))" 
-                        dot={false}
-                        strokeWidth={2}
-                      />
-                    )}
-                    {data.some(d => d.g_force_lat) && (
-                      <Line 
-                        type="monotone" 
-                        dataKey="g_force_lat" 
-                        name="Lateral G" 
-                        stroke="hsl(var(--chart-4))" 
-                        dot={false}
-                        strokeWidth={2}
-                      />
-                    )}
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
+                  )}
+                </LineChart>
+              </ResponsiveContainer>
             </div>
           </CardContent>
         </Card>
