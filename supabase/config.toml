@@ -1,1 +1,4 @@
 project_id = "ubmasfaniokqszfbwatj"
+
+[functions.process-telemetry]
+verify_jwt = true

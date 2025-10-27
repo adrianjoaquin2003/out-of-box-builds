@@ -147,31 +147,62 @@ const Dashboard = () => {
       });
 
       try {
-        // For now, just record the file info - actual telemetry processing would be implemented later
-        const { error } = await supabase
+        // Upload file to Supabase Storage
+        const filePath = `${user?.id}/${sessionId}/${Date.now()}_${file.name}`;
+        const { error: uploadError } = await supabase.storage
+          .from('racing-data')
+          .upload(filePath, file);
+
+        if (uploadError) throw uploadError;
+
+        // Record file in database
+        const { data: fileRecord, error: dbError } = await supabase
           .from('uploaded_files')
           .insert([
             {
               session_id: sessionId,
               user_id: user?.id,
               file_name: file.name,
-              file_path: `${sessionId}/${file.name}`,
+              file_path: filePath,
               file_size: file.size,
-              upload_status: 'completed'
+              upload_status: 'processing'
             }
-          ]);
+          ])
+          .select()
+          .single();
 
-        if (error) throw error;
+        if (dbError) throw dbError;
+
+        toast({
+          title: "Processing Data",
+          description: "Analyzing telemetry data...",
+        });
+
+        // Process the telemetry file
+        const { data: processResult, error: processError } = await supabase.functions.invoke(
+          'process-telemetry',
+          {
+            body: {
+              fileId: fileRecord.id,
+              sessionId: sessionId
+            }
+          }
+        );
+
+        if (processError) throw processError;
 
         toast({
           title: "Upload Complete",
-          description: `${file.name} uploaded successfully.`,
+          description: processResult.message || `${file.name} processed successfully.`,
         });
+
+        // Refresh sessions to show updated data
+        fetchSessions();
       } catch (error) {
         console.error('Error uploading file:', error);
         toast({
           title: "Upload Failed", 
-          description: "Failed to upload file. Please try again.",
+          description: error.message || "Failed to upload file. Please try again.",
           variant: "destructive",
         });
       }
