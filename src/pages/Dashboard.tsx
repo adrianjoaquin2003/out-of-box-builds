@@ -169,7 +169,7 @@ const Dashboard = () => {
               file_name: file.name,
               file_path: filePath,
               file_size: file.size,
-              upload_status: 'processing'
+              upload_status: 'pending'
             }
           ])
           .select()
@@ -178,12 +178,12 @@ const Dashboard = () => {
         if (dbError) throw dbError;
 
         toast({
-          title: "Processing Data",
-          description: "Analyzing telemetry data...",
+          title: "Processing Started",
+          description: "Analyzing telemetry data in the background. This may take a minute...",
         });
 
-        // Process the telemetry file
-        const { data: processResult, error: processError } = await supabase.functions.invoke(
+        // Process the telemetry file (async in background)
+        const { error: processError } = await supabase.functions.invoke(
           'process-telemetry',
           {
             body: {
@@ -193,15 +193,18 @@ const Dashboard = () => {
           }
         );
 
-        if (processError) throw processError;
+        if (processError) {
+          console.error('Process error:', processError);
+          throw processError;
+        }
 
         toast({
-          title: "Upload Complete",
-          description: processResult.message || `${file.name} processed successfully.`,
+          title: "Processing",
+          description: "Your telemetry data is being processed. Refresh to see results.",
         });
 
-        // Refresh sessions to show updated data
-        fetchSessions();
+        // Refresh sessions after a moment
+        setTimeout(() => fetchSessions(), 2000);
       } catch (error) {
         console.error('Error uploading file:', error);
         toast({

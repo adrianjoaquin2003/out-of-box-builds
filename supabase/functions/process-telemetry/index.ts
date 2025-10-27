@@ -25,53 +25,64 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders })
   }
 
-  try {
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  )
 
+  try {
     const { fileId, sessionId } = await req.json()
     
     console.log('Processing telemetry file:', { fileId, sessionId })
 
-    // Get file info from database
-    const { data: fileData, error: fileError } = await supabase
+    // Update status to processing
+    await supabase
       .from('uploaded_files')
-      .select('*')
+      .update({ upload_status: 'processing' })
       .eq('id', fileId)
-      .single()
 
-    if (fileError) {
-      console.error('Error fetching file:', fileError)
-      throw new Error('File not found')
-    }
+    // Start background processing
+    const processData = async () => {
+      try {
+        console.log('Starting background processing for file:', fileId)
 
-    // Download file from storage
-    const { data: fileContent, error: downloadError } = await supabase
-      .storage
-      .from('racing-data')
-      .download(fileData.file_path)
+        // Get file info from database
+        const { data: fileData, error: fileError } = await supabase
+          .from('uploaded_files')
+          .select('*')
+          .eq('id', fileId)
+          .single()
 
-    if (downloadError) {
-      console.error('Error downloading file:', downloadError)
-      throw new Error('Failed to download file')
-    }
+        if (fileError) {
+          console.error('Error fetching file:', fileError)
+          throw new Error('File not found')
+        }
 
-    // Parse file content
-    const text = await fileContent.text()
-    const lines = text.split('\n').filter(line => line.trim())
-    
-    if (lines.length === 0) {
-      throw new Error('File is empty')
-    }
+        // Download file from storage
+        const { data: fileContent, error: downloadError } = await supabase
+          .storage
+          .from('racing-data')
+          .download(fileData.file_path)
 
-    // Parse CSV headers
-    const headers = lines[0].split(',').map(h => h.trim().toLowerCase())
-    console.log('CSV Headers:', headers)
+        if (downloadError) {
+          console.error('Error downloading file:', downloadError)
+          throw new Error('Failed to download file')
+        }
 
-    // Map common header variations to our schema
-    const headerMap: { [key: string]: keyof TelemetryRow } = {
+        // Parse file content
+        const text = await fileContent.text()
+        const lines = text.split('\n').filter(line => line.trim())
+        
+        if (lines.length === 0) {
+          throw new Error('File is empty')
+        }
+
+        // Parse CSV headers
+        const headers = lines[0].split(',').map(h => h.trim().toLowerCase())
+        console.log('CSV Headers:', headers)
+
+        // Map common header variations to our schema
+        const headerMap: { [key: string]: keyof TelemetryRow } = {
       'lap': 'lap_number',
       'lap_number': 'lap_number',
       'lapnumber': 'lap_number',
@@ -94,78 +105,90 @@ Deno.serve(async (req) => {
       'sector_time': 'sector_time',
       'delta': 'delta_time',
       'delta_time': 'delta_time',
-    }
+        }
 
-    // Parse data rows
-    const telemetryData: TelemetryRow[] = []
-    
-    for (let i = 1; i < lines.length; i++) {
-      const values = lines[i].split(',').map(v => v.trim())
-      const row: TelemetryRow = {}
+        // Parse data rows
+        const telemetryData: TelemetryRow[] = []
+        
+        for (let i = 1; i < lines.length; i++) {
+          const values = lines[i].split(',').map(v => v.trim())
+          const row: TelemetryRow = {}
 
-      headers.forEach((header, index) => {
-        const mappedKey = headerMap[header]
-        if (mappedKey && values[index]) {
-          const value = parseFloat(values[index])
-          if (!isNaN(value)) {
-            row[mappedKey] = value
+          headers.forEach((header, index) => {
+            const mappedKey = headerMap[header]
+            if (mappedKey && values[index]) {
+              const value = parseFloat(values[index])
+              if (!isNaN(value)) {
+                row[mappedKey] = value
+              }
+            }
+          })
+
+          if (Object.keys(row).length > 0) {
+            telemetryData.push(row)
           }
         }
-      })
 
-      if (Object.keys(row).length > 0) {
-        telemetryData.push(row)
+        console.log(`Parsed ${telemetryData.length} telemetry records`)
+
+        // Insert telemetry data in batches
+        const batchSize = 500
+        let insertedCount = 0
+
+        for (let i = 0; i < telemetryData.length; i += batchSize) {
+          const batch = telemetryData.slice(i, i + batchSize).map(row => ({
+            ...row,
+            session_id: sessionId,
+            file_id: fileId,
+          }))
+
+          const { error: insertError } = await supabase
+            .from('telemetry_data')
+            .insert(batch)
+
+          if (insertError) {
+            console.error('Error inserting batch:', insertError)
+            throw insertError
+          }
+
+          insertedCount += batch.length
+          console.log(`Inserted ${insertedCount}/${telemetryData.length} records`)
+        }
+
+        // Update file status
+        await supabase
+          .from('uploaded_files')
+          .update({ upload_status: 'processed' })
+          .eq('id', fileId)
+
+        console.log('Processing complete:', telemetryData.length, 'records')
+      } catch (error) {
+        console.error('Background processing error:', error)
+        // Update status to failed
+        await supabase
+          .from('uploaded_files')
+          .update({ upload_status: 'failed' })
+          .eq('id', fileId)
       }
     }
 
-    console.log(`Parsed ${telemetryData.length} telemetry records`)
+    // Start processing in background
+    EdgeRuntime.waitUntil(processData())
 
-    // Insert telemetry data in batches
-    const batchSize = 1000
-    let insertedCount = 0
-
-    for (let i = 0; i < telemetryData.length; i += batchSize) {
-      const batch = telemetryData.slice(i, i + batchSize).map(row => ({
-        ...row,
-        session_id: sessionId,
-        file_id: fileId,
-      }))
-
-      const { error: insertError } = await supabase
-        .from('telemetry_data')
-        .insert(batch)
-
-      if (insertError) {
-        console.error('Error inserting batch:', insertError)
-        throw insertError
-      }
-
-      insertedCount += batch.length
-      console.log(`Inserted ${insertedCount}/${telemetryData.length} records`)
-    }
-
-    // Update file status
-    await supabase
-      .from('uploaded_files')
-      .update({ upload_status: 'processed' })
-      .eq('id', fileId)
-
-    console.log('Processing complete')
-
+    // Return immediate response
     return new Response(
       JSON.stringify({
         success: true,
-        recordsProcessed: telemetryData.length,
-        message: `Successfully processed ${telemetryData.length} telemetry records`
+        message: 'File processing started. This may take a few moments.'
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
+        status: 202, // Accepted
       }
     )
 
   } catch (error) {
-    console.error('Error processing telemetry:', error)
+    console.error('Error starting telemetry processing:', error)
     return new Response(
       JSON.stringify({
         success: false,
