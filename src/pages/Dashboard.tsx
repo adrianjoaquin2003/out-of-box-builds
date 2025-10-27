@@ -4,9 +4,11 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { Plus, Upload, BarChart3, Timer, Zap, LogOut } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { TelemetryChart } from '@/components/TelemetryChart';
 
 interface Session {
   id: string;
@@ -33,6 +35,8 @@ const Dashboard = () => {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [selectedSession, setSelectedSession] = useState<Session | null>(null);
+  const [showAnalysis, setShowAnalysis] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -228,6 +232,11 @@ const Dashboard = () => {
     }
   };
 
+  const handleAnalyzeSession = (session: Session) => {
+    setSelectedSession(session);
+    setShowAnalysis(true);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -386,7 +395,7 @@ const Dashboard = () => {
                       <Upload className="h-3 w-3 mr-1" />
                       Upload Data
                     </Button>
-                    <Button size="sm" variant="outline" className="flex-1">
+                    <Button size="sm" variant="outline" className="flex-1" onClick={() => handleAnalyzeSession(session)}>
                       <BarChart3 className="h-3 w-3 mr-1" />
                       Analyze
                     </Button>
@@ -397,6 +406,19 @@ const Dashboard = () => {
           </div>
         )}
       </main>
+
+      {/* Telemetry Analysis Dialog */}
+      <Dialog open={showAnalysis} onOpenChange={setShowAnalysis}>
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{selectedSession?.name}</DialogTitle>
+            <DialogDescription>
+              {selectedSession?.track_name} - {selectedSession && new Date(selectedSession.date).toLocaleDateString()}
+            </DialogDescription>
+          </DialogHeader>
+          {selectedSession && <TelemetryChart sessionId={selectedSession.id} />}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
