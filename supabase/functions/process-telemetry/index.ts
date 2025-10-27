@@ -121,7 +121,13 @@ async function processData(supabase: any, fileId: string, sessionId: string) {
     // Parse column names from line 15 (index 14)
     const headerLine = lines[14];
     const headers = headerLine.split(',').map(h => h.trim());
+    
+    // Parse units from line 16 (index 15)
+    const unitsLine = lines[15];
+    const units = unitsLine.split(',').map(u => u.trim());
+    
     console.log('CSV Headers (first 10):', headers.slice(0, 10));
+    console.log('CSV Units (first 10):', units.slice(0, 10));
     console.log('Total columns:', headers.length);
 
     // Create mapping from CSV headers to database columns
@@ -189,6 +195,7 @@ async function processData(supabase: any, fileId: string, sessionId: string) {
       for (let j = 0; j < headers.length; j++) {
         const header = headers[j];
         const dbColumn = columnMap[header];
+        const unit = units[j] || '';
         
         if (dbColumn && values[j] !== undefined && values[j] !== '') {
           const value = values[j];
@@ -198,8 +205,22 @@ async function processData(supabase: any, fileId: string, sessionId: string) {
             row[dbColumn] = value;
           } else {
             // Parse numeric values
-            const numValue = parseFloat(value);
+            let numValue = parseFloat(value);
             if (!isNaN(numValue)) {
+              // Convert speed units to km/h
+              if ((dbColumn === 'ground_speed' || dbColumn === 'gps_speed' || dbColumn === 'drive_speed')) {
+                if (unit.toLowerCase() === 'm/s') {
+                  numValue = numValue * 3.6; // m/s to km/h
+                } else if (unit.toLowerCase() === 'mph') {
+                  numValue = numValue * 1.60934; // mph to km/h
+                } else if (unit.toLowerCase().includes('km/h') || unit.toLowerCase().includes('kph')) {
+                  // Already in km/h, no conversion needed
+                } else {
+                  // If unit is unknown, assume it needs conversion from m/s (common default)
+                  console.log(`Unknown speed unit '${unit}' for ${header}, assuming m/s`);
+                  numValue = numValue * 3.6;
+                }
+              }
               row[dbColumn] = numValue;
             }
           }
