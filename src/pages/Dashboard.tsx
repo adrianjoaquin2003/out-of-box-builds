@@ -62,15 +62,41 @@ const Dashboard = () => {
         .from('profiles')
         .select('*')
         .eq('id', user?.id)
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
-      setProfile(data);
+      
+      // If profile doesn't exist, create one
+      if (!data && user) {
+        const { data: newProfile, error: createError } = await supabase
+          .from('profiles')
+          .insert([
+            {
+              id: user.id,
+              email: user.email || '',
+              full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
+              role: user.user_metadata?.role || 'driver',
+              team_name: user.user_metadata?.team_name
+            }
+          ])
+          .select()
+          .single();
+
+        if (createError) throw createError;
+        setProfile(newProfile);
+        
+        toast({
+          title: "Profile Created",
+          description: "Your profile has been set up successfully.",
+        });
+      } else {
+        setProfile(data);
+      }
     } catch (error) {
       console.error('Error fetching profile:', error);
       toast({
-        title: "Error",
-        description: "Failed to load profile data",
+        title: "Profile Error",
+        description: "There was an issue loading your profile. Please try refreshing.",
         variant: "destructive",
       });
     }
