@@ -58,6 +58,8 @@ Deno.serve(async (req) => {
           throw new Error('File not found')
         }
 
+        console.log('File data:', fileData)
+
         // Download file from storage
         const { data: fileContent, error: downloadError } = await supabase
           .storage
@@ -69,12 +71,20 @@ Deno.serve(async (req) => {
           throw new Error('Failed to download file')
         }
 
+        console.log('File downloaded successfully, size:', fileContent.size)
+
         // Parse file content
         const text = await fileContent.text()
         const lines = text.split('\n').filter(line => line.trim())
         
+        console.log('Total lines in file:', lines.length)
+        
         if (lines.length === 0) {
           throw new Error('File is empty')
+        }
+
+        if (lines.length < 2) {
+          throw new Error('File only contains headers, no data rows')
         }
 
         // Parse CSV headers
@@ -131,6 +141,10 @@ Deno.serve(async (req) => {
 
         console.log(`Parsed ${telemetryData.length} telemetry records`)
 
+        if (telemetryData.length === 0) {
+          throw new Error('No valid telemetry data found in file. Check that columns match expected format.')
+        }
+
         // Insert telemetry data in batches
         const batchSize = 500
         let insertedCount = 0
@@ -141,6 +155,8 @@ Deno.serve(async (req) => {
             session_id: sessionId,
             file_id: fileId,
           }))
+
+          console.log(`Inserting batch ${Math.floor(i / batchSize) + 1}, records ${i + 1} to ${Math.min(i + batchSize, telemetryData.length)}`)
 
           const { error: insertError } = await supabase
             .from('telemetry_data')
@@ -155,20 +171,31 @@ Deno.serve(async (req) => {
           console.log(`Inserted ${insertedCount}/${telemetryData.length} records`)
         }
 
-        // Update file status
-        await supabase
+        // Update file status to processed
+        const { error: updateError } = await supabase
           .from('uploaded_files')
           .update({ upload_status: 'processed' })
           .eq('id', fileId)
 
-        console.log('Processing complete:', telemetryData.length, 'records')
+        if (updateError) {
+          console.error('Error updating file status:', updateError)
+        }
+
+        console.log('Processing complete:', telemetryData.length, 'records inserted successfully')
       } catch (error) {
         console.error('Background processing error:', error)
+        console.error('Error details:', { message: error.message, stack: error.stack })
+        
         // Update status to failed
-        await supabase
-          .from('uploaded_files')
-          .update({ upload_status: 'failed' })
-          .eq('id', fileId)
+        try {
+          await supabase
+            .from('uploaded_files')
+            .update({ upload_status: 'failed' })
+            .eq('id', fileId)
+          console.log('File status updated to failed')
+        } catch (updateError) {
+          console.error('Failed to update file status:', updateError)
+        }
       }
     }
 
