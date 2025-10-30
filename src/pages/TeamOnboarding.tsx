@@ -60,22 +60,25 @@ export default function TeamOnboarding() {
 
     setLoading(true);
     try {
-      // Debug: Check auth state
+      // Get current session for auth token
       const { data: { session } } = await supabase.auth.getSession();
-      console.log('Current session:', session);
-      console.log('User ID:', user?.id);
       
-      // Create the team
-      const { data: team, error: teamError } = await supabase
-        .from('teams')
-        .insert({
-          name: createTeamName,
-        })
-        .select()
-        .single();
+      if (!session) {
+        toast({
+          title: 'Error',
+          description: 'You must be logged in to create a team',
+          variant: 'destructive',
+        });
+        return;
+      }
 
-      if (teamError) {
-        if (teamError.code === '23505') {
+      // Call edge function to create team
+      const { data, error } = await supabase.functions.invoke('create-team', {
+        body: { teamName: createTeamName },
+      });
+
+      if (error) {
+        if (error.message?.includes('already exists')) {
           toast({
             title: 'Team Exists',
             description: 'A team with this name already exists',
@@ -83,21 +86,11 @@ export default function TeamOnboarding() {
           });
           return;
         }
-        throw teamError;
+        throw error;
       }
 
-      // Add user as admin
-      const { error: memberError } = await supabase
-        .from('team_members')
-        .insert({
-          team_id: team.id,
-          user_id: user?.id,
-          role: 'admin',
-        });
-
-      if (memberError) {
-        console.error('Error adding team member:', memberError);
-        throw memberError;
+      if (!data?.team) {
+        throw new Error('Failed to create team');
       }
 
       // Wait a moment for the database to update
