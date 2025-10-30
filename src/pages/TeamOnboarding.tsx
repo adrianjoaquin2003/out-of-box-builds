@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -14,6 +14,37 @@ export default function TeamOnboarding() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+
+  // Auto-create profile if it doesn't exist
+  useEffect(() => {
+    const ensureProfile = async () => {
+      if (!user) return;
+
+      try {
+        const { data: existingProfile } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('id', user.id)
+          .maybeSingle();
+
+        if (!existingProfile) {
+          await supabase.from('profiles').insert({
+            id: user.id,
+            email: user.email || '',
+            full_name: user.user_metadata?.full_name || 'User',
+            role: user.user_metadata?.role === 'team_manager' || user.user_metadata?.role === 'engineer' || user.user_metadata?.role === 'driver' 
+              ? user.user_metadata.role 
+              : 'driver',
+            team_name: user.user_metadata?.team_name
+          });
+        }
+      } catch (error) {
+        console.error('Error ensuring profile:', error);
+      }
+    };
+
+    ensureProfile();
+  }, [user]);
   const [createTeamName, setCreateTeamName] = useState('');
   const [joinTeamName, setJoinTeamName] = useState('');
 
