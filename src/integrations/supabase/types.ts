@@ -44,6 +44,44 @@ export type Database = {
         }
         Relationships: []
       }
+      saved_reports: {
+        Row: {
+          charts_config: Json
+          created_at: string
+          id: string
+          name: string
+          session_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          charts_config?: Json
+          created_at?: string
+          id?: string
+          name: string
+          session_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          charts_config?: Json
+          created_at?: string
+          id?: string
+          name?: string
+          session_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_reports_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sessions: {
         Row: {
           car_info: string | null

@@ -5,7 +5,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, Upload, BarChart3, Timer, Zap, LogOut } from 'lucide-react';
+import { Plus, Upload, BarChart3, Timer, Zap, LogOut, FileText } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from '@/hooks/use-toast';
 
 interface Session {
@@ -33,6 +35,9 @@ const Dashboard = () => {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [reportDialogOpen, setReportDialogOpen] = useState(false);
+  const [selectedSessionForReport, setSelectedSessionForReport] = useState<string | null>(null);
+  const [savedReports, setSavedReports] = useState<Array<{ id: string; name: string }>>([]);
 
   useEffect(() => {
     if (!user) {
@@ -257,8 +262,28 @@ const Dashboard = () => {
     }
   };
 
-  const handleAnalyzeSession = (sessionId: string) => {
-    navigate(`/session/${sessionId}/report`);
+  const handleAnalyzeSession = async (sessionId: string) => {
+    setSelectedSessionForReport(sessionId);
+    
+    // Fetch saved reports for this session
+    const { data } = await supabase
+      .from('saved_reports')
+      .select('id, name')
+      .eq('session_id', sessionId)
+      .order('created_at', { ascending: false });
+    
+    setSavedReports(data || []);
+    setReportDialogOpen(true);
+  };
+
+  const handleCreateNewReport = () => {
+    navigate(`/session/${selectedSessionForReport}/report`);
+    setReportDialogOpen(false);
+  };
+
+  const handleOpenReport = (reportId: string) => {
+    navigate(`/session/${selectedSessionForReport}/report/${reportId}`);
+    setReportDialogOpen(false);
   };
 
   if (loading) {
@@ -431,6 +456,58 @@ const Dashboard = () => {
         )}
       </main>
 
+      {/* Report Selection Dialog */}
+      <Dialog open={reportDialogOpen} onOpenChange={setReportDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Select Report</DialogTitle>
+            <DialogDescription>
+              Create a new report or open an existing one
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Button 
+              onClick={handleCreateNewReport}
+              className="w-full racing-gradient"
+              size="lg"
+            >
+              <Plus className="mr-2 h-5 w-5" />
+              Create New Report
+            </Button>
+            
+            {savedReports.length > 0 && (
+              <>
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-background px-2 text-muted-foreground">
+                      Or open existing
+                    </span>
+                  </div>
+                </div>
+                
+                <ScrollArea className="h-[200px]">
+                  <div className="space-y-2">
+                    {savedReports.map(report => (
+                      <Button
+                        key={report.id}
+                        variant="outline"
+                        className="w-full justify-start"
+                        onClick={() => handleOpenReport(report.id)}
+                      >
+                        <FileText className="mr-2 h-4 w-4" />
+                        {report.name}
+                      </Button>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

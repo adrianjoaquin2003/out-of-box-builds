@@ -4,7 +4,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ArrowLeft, Plus, Loader2 } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { ArrowLeft, Plus, Loader2, Save } from 'lucide-react';
 import { ConfigurableChart } from '@/components/ConfigurableChart';
 import { toast } from '@/hooks/use-toast';
 
@@ -40,20 +43,26 @@ const AVAILABLE_METRICS = [
 ];
 
 export default function ReportBuilder() {
-  const { sessionId } = useParams<{ sessionId: string }>();
+  const { sessionId, reportId } = useParams<{ sessionId: string; reportId?: string }>();
   const navigate = useNavigate();
   const [session, setSession] = useState<Session | null>(null);
   const [charts, setCharts] = useState<ChartConfig[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [reportName, setReportName] = useState<string>('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
 
   const categories = ['All', ...Array.from(new Set(AVAILABLE_METRICS.map(m => m.category)))];
 
   useEffect(() => {
     if (sessionId) {
       fetchSession();
+      if (reportId) {
+        fetchReport();
+      }
     }
-  }, [sessionId]);
+  }, [sessionId, reportId]);
 
   const fetchSession = async () => {
     try {
@@ -74,6 +83,90 @@ export default function ReportBuilder() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchReport = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('saved_reports')
+        .select('*')
+        .eq('id', reportId)
+        .single();
+
+      if (error) throw error;
+      
+      setReportName(data.name);
+      setCharts((data.charts_config as any) || []);
+    } catch (error) {
+      console.error('Error fetching report:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load report',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleSaveReport = async () => {
+    if (!reportName.trim()) {
+      setShowSaveDialog(true);
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      
+      if (reportId) {
+        // Update existing report
+        const { error } = await supabase
+          .from('saved_reports')
+          .update({ 
+            name: reportName,
+            charts_config: charts as any
+          })
+          .eq('id', reportId);
+
+        if (error) throw error;
+        
+        toast({
+          title: 'Success',
+          description: 'Report updated successfully',
+        });
+      } else {
+        // Create new report
+        const { data, error } = await supabase
+          .from('saved_reports')
+          .insert({
+            session_id: sessionId!,
+            user_id: userData.user?.id!,
+            name: reportName,
+            charts_config: charts as any
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        toast({
+          title: 'Success',
+          description: 'Report saved successfully',
+        });
+
+        // Navigate to the newly created report
+        navigate(`/session/${sessionId}/report/${data.id}`, { replace: true });
+      }
+    } catch (error) {
+      console.error('Error saving report:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to save report',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSaving(false);
+      setShowSaveDialog(false);
     }
   };
 
@@ -122,12 +215,21 @@ export default function ReportBuilder() {
                 Back to Dashboard
               </Button>
               <div>
-                <h1 className="text-2xl font-bold">{session?.name}</h1>
+                <h1 className="text-2xl font-bold">
+                  {reportName || 'New Report'} - {session?.name}
+                </h1>
                 <p className="text-sm text-muted-foreground">
                   {session?.track_name} - {session && new Date(session.date).toLocaleDateString()}
                 </p>
               </div>
             </div>
+            <Button 
+              onClick={() => reportName ? handleSaveReport() : setShowSaveDialog(true)}
+              disabled={isSaving || charts.length === 0}
+            >
+              <Save className="h-4 w-4 mr-2" />
+              {isSaving ? 'Saving...' : reportId ? 'Update Report' : 'Save Report'}
+            </Button>
           </div>
         </div>
       </header>
@@ -217,6 +319,50 @@ export default function ReportBuilder() {
           </div>
         </main>
       </div>
+
+      {/* Save Report Dialog */}
+      <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Save Report</DialogTitle>
+            <DialogDescription>
+              Give your report a name to save it for later use
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="reportName">Report Name</Label>
+              <Input
+                id="reportName"
+                placeholder="e.g., Vehicle Dynamics Report"
+                value={reportName}
+                onChange={(e) => setReportName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && reportName.trim()) {
+                    handleSaveReport();
+                  }
+                }}
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button 
+                onClick={handleSaveReport} 
+                disabled={!reportName.trim() || isSaving}
+                className="flex-1"
+              >
+                {isSaving ? 'Saving...' : 'Save Report'}
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={() => setShowSaveDialog(false)}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
