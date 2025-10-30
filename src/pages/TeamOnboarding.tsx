@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, Users } from 'lucide-react';
+import { Loader2, Users, Home } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
 export default function TeamOnboarding() {
@@ -109,7 +109,7 @@ export default function TeamOnboarding() {
       });
 
       // Force a page reload to refresh team membership
-      window.location.href = '/dashboard';
+      window.location.href = '/home';
     } catch (error) {
       console.error('Error creating team:', error);
       toast({
@@ -178,7 +178,7 @@ export default function TeamOnboarding() {
         description: `Joined ${team.name} successfully!`,
       });
 
-      navigate('/dashboard');
+      navigate('/home');
     } catch (error) {
       console.error('Error joining team:', error);
       toast({
@@ -193,6 +193,14 @@ export default function TeamOnboarding() {
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => navigate('/home')}
+        className="absolute top-4 left-4"
+      >
+        <Home className="h-5 w-5" />
+      </Button>
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
