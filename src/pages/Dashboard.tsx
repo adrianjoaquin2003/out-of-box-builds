@@ -317,10 +317,13 @@ const Dashboard = () => {
           <CardHeader>
             <CardTitle>No Team Assigned</CardTitle>
             <CardDescription>
-              You need to be part of a team to access the dashboard. Please contact your team administrator.
+              You need to be part of a team to access the dashboard. Create a team or contact your team administrator to join one.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-2">
+            <Button onClick={() => navigate('/')} className="w-full racing-gradient">
+              Go to Home
+            </Button>
             <Button onClick={signOut} variant="outline" className="w-full">
               Sign Out
             </Button>
