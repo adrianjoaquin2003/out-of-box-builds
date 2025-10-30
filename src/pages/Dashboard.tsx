@@ -321,8 +321,8 @@ const Dashboard = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
-            <Button onClick={() => navigate('/')} className="w-full racing-gradient">
-              Go to Home
+            <Button onClick={() => navigate('/team-onboarding')} className="w-full racing-gradient">
+              Create or Join Team
             </Button>
             <Button onClick={signOut} variant="outline" className="w-full">
               Sign Out

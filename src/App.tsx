@@ -12,6 +12,7 @@ import ReportBuilder from "./pages/ReportBuilder";
 import Dashboards from "./pages/Dashboards";
 import DashboardView from "./pages/DashboardView";
 import TeamManagement from "./pages/TeamManagement";
+import TeamOnboarding from "./pages/TeamOnboarding";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,6 +31,7 @@ const App = () => (
           <Route path="/dashboards" element={<Dashboards />} />
           <Route path="/dashboard-view/:dashboardId" element={<DashboardView />} />
           <Route path="/team" element={<TeamManagement />} />
+          <Route path="/team-onboarding" element={<TeamOnboarding />} />
           <Route path="/session/:sessionId/report" element={<ReportBuilder />} />
           <Route path="/session/:sessionId/report/:reportId" element={<ReportBuilder />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
