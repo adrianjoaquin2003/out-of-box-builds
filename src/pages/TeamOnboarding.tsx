@@ -95,14 +95,21 @@ export default function TeamOnboarding() {
           role: 'admin',
         });
 
-      if (memberError) throw memberError;
+      if (memberError) {
+        console.error('Error adding team member:', memberError);
+        throw memberError;
+      }
+
+      // Wait a moment for the database to update
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       toast({
         title: 'Success',
         description: 'Team created successfully!',
       });
 
-      navigate('/dashboard');
+      // Force a page reload to refresh team membership
+      window.location.href = '/dashboard';
     } catch (error) {
       console.error('Error creating team:', error);
       toast({
