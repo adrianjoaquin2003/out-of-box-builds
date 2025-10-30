@@ -78,7 +78,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
@@ -89,14 +89,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         description: error.message,
         variant: "destructive",
       });
-    } else {
-      toast({
-        title: "Welcome Back!",
-        description: "You have successfully signed in.",
-      });
+      return { error };
     }
 
-    return { error };
+    // Check if profile exists
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('id', data.user.id)
+      .maybeSingle();
+
+    if (profileError || !profile) {
+      // Sign user out if no profile exists
+      await supabase.auth.signOut();
+      const noProfileError = {
+        message: "No account found. Please sign up first to create an account."
+      };
+      toast({
+        title: "Account Not Found",
+        description: noProfileError.message,
+        variant: "destructive",
+      });
+      return { error: noProfileError };
+    }
+
+    toast({
+      title: "Welcome Back!",
+      description: "You have successfully signed in.",
+    });
+
+    return { error: null };
   };
 
   const signOut = async () => {
