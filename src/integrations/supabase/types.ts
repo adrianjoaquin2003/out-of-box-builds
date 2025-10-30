@@ -485,7 +485,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      is_team_admin: {
+        Args: { check_team_id: string; check_user_id: string }
+        Returns: boolean
+      }
+      is_team_member: {
+        Args: { check_team_id: string; check_user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       bid_status: "pending" | "accepted" | "rejected" | "withdrawn"
