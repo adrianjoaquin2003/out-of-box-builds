@@ -59,6 +59,7 @@ export type Database = {
           description: string | null
           id: string
           name: string
+          team_id: string | null
           updated_at: string
           user_id: string
         }
@@ -67,6 +68,7 @@ export type Database = {
           description?: string | null
           id?: string
           name: string
+          team_id?: string | null
           updated_at?: string
           user_id: string
         }
@@ -75,10 +77,19 @@ export type Database = {
           description?: string | null
           id?: string
           name?: string
+          team_id?: string | null
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "dashboards_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -87,6 +98,7 @@ export type Database = {
           full_name: string
           id: string
           role: Database["public"]["Enums"]["user_role"]
+          team_id: string | null
           team_name: string | null
           updated_at: string
         }
@@ -96,6 +108,7 @@ export type Database = {
           full_name: string
           id: string
           role?: Database["public"]["Enums"]["user_role"]
+          team_id?: string | null
           team_name?: string | null
           updated_at?: string
         }
@@ -105,10 +118,19 @@ export type Database = {
           full_name?: string
           id?: string
           role?: Database["public"]["Enums"]["user_role"]
+          team_id?: string | null
           team_name?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       saved_reports: {
         Row: {
@@ -157,6 +179,7 @@ export type Database = {
           id: string
           name: string
           session_type: string
+          team_id: string | null
           track_name: string | null
           updated_at: string
           user_id: string
@@ -170,6 +193,7 @@ export type Database = {
           id?: string
           name: string
           session_type: string
+          team_id?: string | null
           track_name?: string | null
           updated_at?: string
           user_id: string
@@ -183,10 +207,72 @@ export type Database = {
           id?: string
           name?: string
           session_type?: string
+          team_id?: string | null
           track_name?: string | null
           updated_at?: string
           user_id?: string
           weather_conditions?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sessions_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      team_members: {
+        Row: {
+          id: string
+          joined_at: string
+          role: string
+          team_id: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          joined_at?: string
+          role?: string
+          team_id: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          joined_at?: string
+          role?: string
+          team_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_members_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      teams: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          updated_at?: string
         }
         Relationships: []
       }

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTeam } from '@/hooks/useTeam';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -22,6 +23,7 @@ interface Dashboard {
 export default function Dashboards() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { team, loading: teamLoading } = useTeam();
   const [dashboards, setDashboards] = useState<Dashboard[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -37,10 +39,10 @@ export default function Dashboards() {
 
   const fetchDashboards = async () => {
     try {
+      // Dashboards are now team-scoped, RLS handles filtering
       const { data, error } = await supabase
         .from('dashboards')
         .select('*')
-        .eq('user_id', user?.id)
         .order('updated_at', { ascending: false });
 
       if (error) throw error;
@@ -58,6 +60,15 @@ export default function Dashboards() {
   };
 
   const handleCreateDashboard = async () => {
+    if (!team) {
+      toast({
+        title: 'Error',
+        description: 'You must be part of a team to create dashboards',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     if (!newDashboard.name.trim()) {
       toast({
         title: 'Error',
@@ -72,6 +83,7 @@ export default function Dashboards() {
         .from('dashboards')
         .insert({
           user_id: user?.id,
+          team_id: team.id,
           name: newDashboard.name,
           description: newDashboard.description || null,
         })
@@ -127,7 +139,7 @@ export default function Dashboards() {
     }
   };
 
-  if (loading) {
+  if (loading || teamLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin" />

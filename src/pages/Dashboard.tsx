@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { useTeam } from '@/hooks/useTeam';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, Upload, BarChart3, Timer, Zap, LogOut, FileText, LayoutDashboard } from 'lucide-react';
+import { Plus, Upload, BarChart3, Timer, Zap, LogOut, FileText, LayoutDashboard, Users } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from '@/hooks/use-toast';
@@ -32,6 +33,7 @@ interface Profile {
 const Dashboard = () => {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
+  const { team, loading: teamLoading } = useTeam();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -105,10 +107,11 @@ const Dashboard = () => {
 
   const fetchSessions = async () => {
     try {
+      // Sessions are now team-scoped, so no need to filter by user_id
+      // RLS policies will handle team-based access
       const { data, error } = await supabase
         .from('sessions')
         .select('*')
-        .eq('user_id', user?.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -124,6 +127,15 @@ const Dashboard = () => {
   };
 
   const createNewSession = async () => {
+    if (!team) {
+      toast({
+        title: "No Team",
+        description: "You must be part of a team to create sessions",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const sessionName = prompt('Enter session name:');
     if (!sessionName) return;
 
@@ -136,6 +148,7 @@ const Dashboard = () => {
         .insert([
           {
             user_id: user?.id,
+            team_id: team.id,
             name: sessionName,
             session_type: sessionType,
             track_name: trackName,
@@ -286,13 +299,33 @@ const Dashboard = () => {
     setReportDialogOpen(false);
   };
 
-  if (loading) {
+  if (loading || teamLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
           <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-muted-foreground">Loading dashboard...</p>
         </div>
+      </div>
+    );
+  }
+
+  if (!team) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Card className="max-w-md">
+          <CardHeader>
+            <CardTitle>No Team Assigned</CardTitle>
+            <CardDescription>
+              You need to be part of a team to access the dashboard. Please contact your team administrator.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button onClick={signOut} variant="outline" className="w-full">
+              Sign Out
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -315,10 +348,15 @@ const Dashboard = () => {
             <div className="flex items-center space-x-4">
               <div className="text-right">
                 <p className="text-sm font-medium">{profile?.full_name || user?.email}</p>
+                <p className="text-xs text-muted-foreground">{team.name}</p>
                 <Badge variant="outline" className={getRoleColor(profile?.role || 'driver')}>
                   {profile?.role?.toUpperCase().replace('_', ' ') || 'DRIVER'}
                 </Badge>
               </div>
+              <Button variant="outline" size="sm" onClick={() => navigate('/team')}>
+                <Users className="h-4 w-4 mr-2" />
+                Team
+              </Button>
               <Button variant="outline" onClick={signOut}>
                 <LogOut className="h-4 w-4 mr-2" />
                 Sign Out
