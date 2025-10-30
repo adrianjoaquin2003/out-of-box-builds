@@ -14,6 +14,72 @@ export type Database = {
   }
   public: {
     Tables: {
+      dashboard_reports: {
+        Row: {
+          created_at: string
+          dashboard_id: string
+          id: string
+          position: number
+          report_id: string
+        }
+        Insert: {
+          created_at?: string
+          dashboard_id: string
+          id?: string
+          position?: number
+          report_id: string
+        }
+        Update: {
+          created_at?: string
+          dashboard_id?: string
+          id?: string
+          position?: number
+          report_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dashboard_reports_dashboard_id_fkey"
+            columns: ["dashboard_id"]
+            isOneToOne: false
+            referencedRelation: "dashboards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dashboard_reports_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "saved_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dashboards: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string

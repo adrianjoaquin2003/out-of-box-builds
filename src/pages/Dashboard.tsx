@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, Upload, BarChart3, Timer, Zap, LogOut, FileText } from 'lucide-react';
+import { Plus, Upload, BarChart3, Timer, Zap, LogOut, FileText, LayoutDashboard } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from '@/hooks/use-toast';
@@ -332,12 +332,20 @@ const Dashboard = () => {
       <main className="container mx-auto px-4 py-8">
         {/* Welcome Section */}
         <div className="mb-8">
-          <h2 className="text-3xl font-bold mb-2">
-            Welcome back, {profile?.full_name?.split(' ')[0] || 'Driver'}
-          </h2>
-          <p className="text-muted-foreground mb-6">
-            Analyze your racing performance with professional-grade telemetry tools.
-          </p>
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-3xl font-bold mb-2">
+                Welcome back, {profile?.full_name?.split(' ')[0] || 'Driver'}
+              </h2>
+              <p className="text-muted-foreground">
+                Analyze your racing performance with professional-grade telemetry tools.
+              </p>
+            </div>
+            <Button onClick={() => navigate('/dashboards')} variant="outline" size="lg">
+              <LayoutDashboard className="h-5 w-5 mr-2" />
+              View Dashboards
+            </Button>
+          </div>
           
           {/* Quick Stats */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">

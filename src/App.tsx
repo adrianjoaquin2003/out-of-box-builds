@@ -9,6 +9,8 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import ReportBuilder from "./pages/ReportBuilder";
+import Dashboards from "./pages/Dashboards";
+import DashboardView from "./pages/DashboardView";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -21,13 +23,15 @@ const App = () => (
           <Toaster />
           <Sonner />
           <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/auth" element={<Auth />} />
-            <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/" element={<Index />} />
+          <Route path="/auth" element={<Auth />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/dashboards" element={<Dashboards />} />
+          <Route path="/dashboard-view/:dashboardId" element={<DashboardView />} />
           <Route path="/session/:sessionId/report" element={<ReportBuilder />} />
           <Route path="/session/:sessionId/report/:reportId" element={<ReportBuilder />} />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
+          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+          <Route path="*" element={<NotFound />} />
           </Routes>
         </TooltipProvider>
       </AuthProvider>

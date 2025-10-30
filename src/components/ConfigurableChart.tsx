@@ -32,6 +32,7 @@ interface ConfigurableChartProps {
   chartType: 'line' | 'area' | 'bar';
   onRemove: () => void;
   onChangeChartType: (type: 'line' | 'area' | 'bar') => void;
+  readOnly?: boolean;
 }
 
 export function ConfigurableChart({
@@ -42,6 +43,7 @@ export function ConfigurableChart({
   chartType,
   onRemove,
   onChangeChartType,
+  readOnly = false,
 }: ConfigurableChartProps) {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -171,28 +173,32 @@ export function ConfigurableChart({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
-                  {chartType.charAt(0).toUpperCase() + chartType.slice(1)}
-                  <ChevronDown className="ml-2 h-4 w-4" />
+            {!readOnly && (
+              <>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      {chartType.charAt(0).toUpperCase() + chartType.slice(1)}
+                      <ChevronDown className="ml-2 h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    <DropdownMenuItem onClick={() => onChangeChartType('line')}>
+                      Line Chart
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onChangeChartType('area')}>
+                      Area Chart
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onChangeChartType('bar')}>
+                      Bar Chart
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <Button variant="ghost" size="sm" onClick={onRemove}>
+                  <X className="h-4 w-4" />
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent>
-                <DropdownMenuItem onClick={() => onChangeChartType('line')}>
-                  Line Chart
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onChangeChartType('area')}>
-                  Area Chart
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onChangeChartType('bar')}>
-                  Bar Chart
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <Button variant="ghost" size="sm" onClick={onRemove}>
-              <X className="h-4 w-4" />
-            </Button>
+              </>
+            )}
           </div>
         </div>
       </CardHeader>
