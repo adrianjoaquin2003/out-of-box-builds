@@ -48,7 +48,7 @@ export default function TeamManagement() {
         .from('team_members')
         .select(`
           *,
-          profiles (
+          profiles!inner (
             full_name,
             email
           )
@@ -57,7 +57,7 @@ export default function TeamManagement() {
         .order('joined_at', { ascending: true });
 
       if (error) throw error;
-      setMembers(data || []);
+      setMembers((data || []) as any);
     } catch (error) {
       console.error('Error fetching members:', error);
       toast({
