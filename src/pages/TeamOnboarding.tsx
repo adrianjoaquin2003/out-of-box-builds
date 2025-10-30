@@ -60,6 +60,11 @@ export default function TeamOnboarding() {
 
     setLoading(true);
     try {
+      // Debug: Check auth state
+      const { data: { session } } = await supabase.auth.getSession();
+      console.log('Current session:', session);
+      console.log('User ID:', user?.id);
+      
       // Create the team
       const { data: team, error: teamError } = await supabase
         .from('teams')
