@@ -66,9 +66,36 @@ export default function ReportBuilder() {
       if (error) throw error;
       
       // Parse available_metrics as an array of Metric objects
-      const metrics = Array.isArray(data.available_metrics) 
+      let metrics = Array.isArray(data.available_metrics) 
         ? (data.available_metrics as unknown as Metric[])
         : [];
+      
+      // Check if metadata needs fixing (has quoted keys)
+      if (metrics.length > 0 && metrics[0].key.startsWith('"')) {
+        // Fix the metadata by removing extra quotes
+        const fixedMetrics = metrics.map(metric => ({
+          key: metric.key.replace(/"/g, ''),
+          label: metric.label.replace(/"/g, ''),
+          unit: metric.unit.replace(/"/g, ''),
+          category: metric.category
+        }));
+        
+        // Update the session with fixed metadata
+        const { error: updateError } = await supabase
+          .from('sessions')
+          .update({ available_metrics: fixedMetrics as any })
+          .eq('id', sessionId);
+        
+        if (updateError) {
+          console.error('Error updating metadata:', updateError);
+        } else {
+          metrics = fixedMetrics;
+          toast({
+            title: 'Metadata Fixed',
+            description: 'Session metadata has been automatically corrected',
+          });
+        }
+      }
       
       setSession({
         id: data.id,
