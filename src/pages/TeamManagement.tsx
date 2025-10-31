@@ -81,11 +81,11 @@ export default function TeamManagement() {
     }
 
     try {
-      // Find user by email
+      // Find user by email (case-insensitive)
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('id')
-        .eq('email', inviteEmail.toLowerCase())
+        .ilike('email', inviteEmail.trim())
         .maybeSingle();
 
       if (profileError) throw profileError;
