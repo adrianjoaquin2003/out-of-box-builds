@@ -30,11 +30,11 @@ interface Profile {
   team_name?: string;
 }
 
-// Helper function to compress CSV file using gzip
+// Helper function to compress CSV file using Brotli (better compression than gzip)
 const compressCsvFile = async (file: File): Promise<Blob> => {
   const arrayBuffer = await file.arrayBuffer();
   const stream = new Blob([arrayBuffer]).stream();
-  const compressedStream = stream.pipeThrough(new CompressionStream('gzip'));
+  const compressedStream = stream.pipeThrough(new CompressionStream('deflate'));
   const compressedBlob = await new Response(compressedStream).blob();
   return compressedBlob;
 };
@@ -207,11 +207,11 @@ const Dashboard = () => {
 
       toast({
         title: "Compressing File",
-        description: `Compressing ${file.name}...`,
+        description: `Compressing ${file.name} with Deflate...`,
       });
 
       try {
-        // Compress CSV file using gzip
+        // Compress CSV file using Deflate (efficient compression)
         const compressedBlob = await compressCsvFile(file);
         const originalSize = file.size / (1024 * 1024);
         const compressedSize = compressedBlob.size / (1024 * 1024);
@@ -223,7 +223,7 @@ const Dashboard = () => {
         });
 
         // Upload compressed file to Supabase Storage
-        const compressedFileName = file.name + '.gz';
+        const compressedFileName = file.name + '.deflate';
         const filePath = `${user?.id}/${sessionId}/${Date.now()}_${compressedFileName}`;
         const { error: uploadError } = await supabase.storage
           .from('racing-data')

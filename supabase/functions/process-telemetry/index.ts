@@ -109,14 +109,23 @@ async function processData(supabase: any, fileId: string, sessionId: string) {
     if (downloadError) throw downloadError;
     console.log('File downloaded successfully, size:', fileContent.size);
 
-    // Check if file is gzipped and decompress if needed
+    // Check if file is compressed and decompress if needed
     let text: string;
-    if (fileData.file_name.endsWith('.gz')) {
+    if (fileData.file_name.endsWith('.deflate')) {
+      console.log('Decompressing deflate file...');
+      const decompressedStream = fileContent.stream().pipeThrough(new DecompressionStream('deflate'));
+      const decompressedBlob = await new Response(decompressedStream).blob();
+      text = await decompressedBlob.text();
+      console.log('Decompression complete');
+    } else if (fileData.file_name.endsWith('.gz')) {
       console.log('Decompressing gzip file...');
       const decompressedStream = fileContent.stream().pipeThrough(new DecompressionStream('gzip'));
       const decompressedBlob = await new Response(decompressedStream).blob();
       text = await decompressedBlob.text();
       console.log('Decompression complete');
+    } else if (fileData.file_name.endsWith('.parquet')) {
+      console.log('Parquet files not yet supported in edge function');
+      throw new Error('Parquet processing not implemented. Please use CSV files.');
     } else {
       text = await fileContent.text();
     }
