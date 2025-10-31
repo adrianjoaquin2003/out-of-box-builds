@@ -389,7 +389,7 @@ const Dashboard = () => {
               file_name: compressedFileName,
               file_path: filePath,
               file_size: compressedBlob.size,
-              upload_status: 'processed' // Processed client-side!
+              upload_status: 'pending' // Will be processed by Edge Function
             }
           ])
           .select()
@@ -407,8 +407,27 @@ const Dashboard = () => {
 
         toast({
           title: "Upload Complete",
-          description: `Successfully uploaded with ${metadata.length} metrics. Ready to analyze!`,
+          description: `File uploaded with ${metadata.length} metrics. Processing telemetry data...`,
         });
+
+        // Trigger Edge Function to decompress and insert telemetry data
+        const { data: functionData, error: functionError } = await supabase.functions.invoke('process-telemetry', {
+          body: { fileId: fileRecord.id, sessionId }
+        });
+
+        if (functionError) {
+          console.error('Error triggering processing:', functionError);
+          toast({
+            title: "Processing Error",
+            description: "File uploaded but telemetry processing failed. Check the file status.",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Processing Started",
+            description: "Telemetry data is being processed in the background.",
+          });
+        }
 
         // Refresh
         fetchSessions();
