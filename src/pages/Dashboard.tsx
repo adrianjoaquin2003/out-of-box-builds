@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, Upload, BarChart3, Timer, Zap, LogOut, FileText, LayoutDashboard, Users } from 'lucide-react';
+import { Plus, Upload, BarChart3, Timer, Zap, LogOut, FileText, LayoutDashboard, Users, RefreshCcw } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from '@/hooks/use-toast';
@@ -19,6 +19,14 @@ interface Session {
   date: string;
   driver_name: string;
   car_info: string;
+  created_at: string;
+}
+
+interface FileStatus {
+  id: string;
+  session_id: string;
+  file_name: string;
+  upload_status: 'pending' | 'processing' | 'processed' | 'failed';
   created_at: string;
 }
 
@@ -49,6 +57,7 @@ const Dashboard = () => {
   const [reportDialogOpen, setReportDialogOpen] = useState(false);
   const [selectedSessionForReport, setSelectedSessionForReport] = useState<string | null>(null);
   const [savedReports, setSavedReports] = useState<Array<{ id: string; name: string }>>([]);
+  const [fileStatuses, setFileStatuses] = useState<Record<string, FileStatus[]>>({});
 
   useEffect(() => {
     if (!user) {
@@ -60,7 +69,7 @@ const Dashboard = () => {
 
   const fetchUserData = async () => {
     try {
-      await Promise.all([fetchProfile(), fetchSessions()]);
+      await Promise.all([fetchProfile(), fetchSessions(), fetchFileStatuses()]);
     } catch (error) {
       console.error('Error fetching user data:', error);
     } finally {
@@ -132,6 +141,30 @@ const Dashboard = () => {
         description: "Failed to load sessions",
         variant: "destructive",
       });
+    }
+  };
+
+  const fetchFileStatuses = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('uploaded_files')
+        .select('id, session_id, file_name, upload_status, created_at')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      // Group files by session_id
+      const grouped = (data || []).reduce((acc, file) => {
+        if (!acc[file.session_id]) {
+          acc[file.session_id] = [];
+        }
+        acc[file.session_id].push(file as FileStatus);
+        return acc;
+      }, {} as Record<string, FileStatus[]>);
+
+      setFileStatuses(grouped);
+    } catch (error) {
+      console.error('Error fetching file statuses:', error);
     }
   };
 
@@ -275,8 +308,11 @@ const Dashboard = () => {
           description: "Your telemetry data is being processed. Refresh to see results.",
         });
 
-        // Refresh sessions after a moment
-        setTimeout(() => fetchSessions(), 2000);
+        // Refresh sessions and file statuses after a moment
+        setTimeout(() => {
+          fetchSessions();
+          fetchFileStatuses();
+        }, 2000);
       } catch (error) {
         console.error('Error uploading file:', error);
         toast({
@@ -296,6 +332,25 @@ const Dashboard = () => {
       case 'team_manager': return 'bg-amber-500/20 text-amber-400 border-amber-500/30';
       default: return 'bg-gray-500/20 text-gray-400 border-gray-500/30';
     }
+  };
+
+  const getFileStatusBadge = (status: string) => {
+    switch (status) {
+      case 'processed':
+        return <Badge variant="outline" className="bg-green-500/20 text-green-400 border-green-500/30">Processed</Badge>;
+      case 'processing':
+        return <Badge variant="outline" className="bg-blue-500/20 text-blue-400 border-blue-500/30">Processing</Badge>;
+      case 'pending':
+        return <Badge variant="outline" className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">Pending</Badge>;
+      case 'failed':
+        return <Badge variant="outline" className="bg-red-500/20 text-red-400 border-red-500/30">Failed</Badge>;
+      default:
+        return null;
+    }
+  };
+
+  const getSessionFiles = (sessionId: string) => {
+    return fileStatuses[sessionId] || [];
   };
 
   const getSessionTypeColor = (type: string) => {
@@ -468,10 +523,26 @@ const Dashboard = () => {
         {/* Sessions Section */}
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-xl font-semibold">Track Sessions</h3>
-          <Button onClick={createNewSession} className="racing-gradient">
-            <Plus className="h-4 w-4 mr-2" />
-            New Session
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              onClick={() => {
+                fetchFileStatuses();
+                toast({
+                  title: "Status Refreshed",
+                  description: "File processing statuses updated",
+                });
+              }} 
+              variant="outline"
+              size="default"
+            >
+              <RefreshCcw className="h-4 w-4 mr-2" />
+              Refresh Status
+            </Button>
+            <Button onClick={createNewSession} className="racing-gradient">
+              <Plus className="h-4 w-4 mr-2" />
+              New Session
+            </Button>
+          </div>
         </div>
 
         {sessions.length === 0 ? (
@@ -516,10 +587,24 @@ const Dashboard = () => {
                       <span>{session.driver_name}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Created:</span>
-                      <span>{new Date(session.created_at).toLocaleDateString()}</span>
+                      <span className="text-muted-foreground">Files:</span>
+                      <span>{getSessionFiles(session.id).length}</span>
                     </div>
                   </div>
+                  
+                  {/* File Status Indicators */}
+                  {getSessionFiles(session.id).length > 0 && (
+                    <div className="mt-3 pt-3 border-t space-y-1">
+                      {getSessionFiles(session.id).map((file) => (
+                        <div key={file.id} className="flex items-center justify-between text-xs">
+                          <span className="text-muted-foreground truncate max-w-[150px]">
+                            {file.file_name.replace('.deflate', '')}
+                          </span>
+                          {getFileStatusBadge(file.upload_status)}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <div className="mt-4 flex space-x-2">
                     <Button size="sm" variant="outline" className="flex-1" onClick={() => handleFileUpload(session.id)}>
                       <Upload className="h-3 w-3 mr-1" />
