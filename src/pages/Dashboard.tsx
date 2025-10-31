@@ -30,6 +30,15 @@ interface Profile {
   team_name?: string;
 }
 
+// Helper function to compress CSV file using gzip
+const compressCsvFile = async (file: File): Promise<Blob> => {
+  const arrayBuffer = await file.arrayBuffer();
+  const stream = new Blob([arrayBuffer]).stream();
+  const compressedStream = stream.pipeThrough(new CompressionStream('gzip'));
+  const compressedBlob = await new Response(compressedStream).blob();
+  return compressedBlob;
+};
+
 const Dashboard = () => {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
@@ -197,16 +206,28 @@ const Dashboard = () => {
       }
 
       toast({
-        title: "Upload Started",
-        description: `Uploading ${file.name}...`,
+        title: "Compressing File",
+        description: `Compressing ${file.name}...`,
       });
 
       try {
-        // Upload file to Supabase Storage
-        const filePath = `${user?.id}/${sessionId}/${Date.now()}_${file.name}`;
+        // Compress CSV file using gzip
+        const compressedBlob = await compressCsvFile(file);
+        const originalSize = file.size / (1024 * 1024);
+        const compressedSize = compressedBlob.size / (1024 * 1024);
+        const compressionRatio = ((1 - compressedBlob.size / file.size) * 100).toFixed(1);
+
+        toast({
+          title: "Compression Complete",
+          description: `Reduced from ${originalSize.toFixed(2)}MB to ${compressedSize.toFixed(2)}MB (${compressionRatio}% smaller). Uploading...`,
+        });
+
+        // Upload compressed file to Supabase Storage
+        const compressedFileName = file.name + '.gz';
+        const filePath = `${user?.id}/${sessionId}/${Date.now()}_${compressedFileName}`;
         const { error: uploadError } = await supabase.storage
           .from('racing-data')
-          .upload(filePath, file);
+          .upload(filePath, compressedBlob);
 
         if (uploadError) throw uploadError;
 
@@ -217,9 +238,9 @@ const Dashboard = () => {
             {
               session_id: sessionId,
               user_id: user?.id,
-              file_name: file.name,
+              file_name: compressedFileName,
               file_path: filePath,
-              file_size: file.size,
+              file_size: compressedBlob.size,
               upload_status: 'pending'
             }
           ])
