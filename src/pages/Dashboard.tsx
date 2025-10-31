@@ -351,87 +351,200 @@ const Dashboard = () => {
       });
 
       try {
-        // Extract metadata client-side (fast, only reads first 1000 rows)
+        // Extract metadata client-side
         const metadata = await extractCsvMetadata(file);
         
         toast({
           title: "Metadata Extracted",
-          description: `Found ${metadata.length} metrics. Compressing file...`,
+          description: `Found ${metadata.length} metrics. Processing telemetry data...`,
         });
 
-        // Compress the original CSV with deflate
-        const compressedBlob = await compressCsvFile(file);
-        const originalSize = file.size / (1024 * 1024);
-        const compressedSize = compressedBlob.size / (1024 * 1024);
-        const compressionRatio = ((1 - compressedBlob.size / file.size) * 100).toFixed(1);
+        // Parse and insert telemetry data client-side
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+          try {
+            const text = e.target?.result as string;
+            const lines = text.split('\n');
+            
+            // Skip metadata lines (1-14), headers at line 15, units at line 16, data starts at line 17
+            const headerLine = lines[14];
+            const headers = headerLine.split(',').map(h => h.trim().replace(/"/g, ''));
+            
+            // Column mapping
+            const columnMap: Record<string, string> = {
+              'Time': 'time',
+              'Lap Number': 'lap_number',
+              'Lap Time': 'lap_time',
+              'Lap Distance': 'lap_distance',
+              'Lap Gain/Loss Running': 'lap_gain_loss_running',
+              'Running Lap Time': 'running_lap_time',
+              'Lap Time Predicted': 'lap_time_predicted',
+              'Reference Lap Time': 'reference_lap_time',
+              'Trip Distance': 'trip_distance',
+              'G Force Lat': 'g_force_lat',
+              'G Force Long': 'g_force_long',
+              'G Force Vert': 'g_force_vert',
+              'Ground Speed': 'ground_speed',
+              'GPS Speed': 'gps_speed',
+              'Drive Speed': 'drive_speed',
+              'GPS Latitude': 'gps_latitude',
+              'GPS Longitude': 'gps_longitude',
+              'GPS Altitude': 'gps_altitude',
+              'GPS Heading': 'gps_heading',
+              'GPS Sats Used': 'gps_sats_used',
+              'GPS Time': 'gps_time',
+              'GPS Date': 'gps_date',
+              'Engine Speed': 'engine_speed',
+              'Engine Oil Pressure': 'engine_oil_pressure',
+              'Engine Oil Temperature': 'engine_oil_temperature',
+              'Coolant Temperature': 'coolant_temperature',
+              'Ignition Timing': 'ignition_timing',
+              'Fuel Pressure Sensor': 'fuel_pressure_sensor',
+              'Fuel Temperature': 'fuel_temperature',
+              'Fuel Used M1': 'fuel_used_m1',
+              'Fuel Inj Primary Duty Cycle': 'fuel_inj_primary_duty_cycle',
+              'Inlet Manifold Pressure': 'inlet_manifold_pressure',
+              'Inlet Air Temperature': 'inlet_air_temperature',
+              'Boost Pressure': 'boost_pressure',
+              'Airbox Temperature': 'airbox_temperature',
+              'Throttle Position': 'throttle_position',
+              'Throttle Pedal': 'throttle_pedal',
+              'Gear': 'gear',
+              'Gear Detect Value': 'gear_detect_value',
+              'Bat Volts ECU': 'bat_volts_ecu',
+              'Bat Volts Dash': 'bat_volts_dash',
+              'CPU Usage': 'cpu_usage',
+              'Device Up Time': 'device_up_time',
+              'Comms RS232-2 Diag': 'comms_rs232_2_diag',
+              'Dash Temp': 'dash_temp'
+            };
 
-        toast({
-          title: "Compression Complete",
-          description: `${originalSize.toFixed(2)}MB → ${compressedSize.toFixed(2)}MB (${compressionRatio}% smaller). Uploading...`,
-        });
+            // Compress and upload file for archival
+            const compressedBlob = await compressCsvFile(file);
+            const compressedFileName = file.name + '.deflate';
+            const filePath = `${user?.id}/${sessionId}/${Date.now()}_${compressedFileName}`;
+            const { error: uploadError } = await supabase.storage
+              .from('racing-data')
+              .upload(filePath, compressedBlob);
 
-        // Upload compressed file
-        const compressedFileName = file.name + '.deflate';
-        const filePath = `${user?.id}/${sessionId}/${Date.now()}_${compressedFileName}`;
-        const { error: uploadError } = await supabase.storage
-          .from('racing-data')
-          .upload(filePath, compressedBlob);
+            if (uploadError) throw uploadError;
 
-        if (uploadError) throw uploadError;
+            // Record file in database
+            const { data: fileRecord, error: dbError } = await supabase
+              .from('uploaded_files')
+              .insert([{
+                session_id: sessionId,
+                user_id: user?.id,
+                file_name: compressedFileName,
+                file_path: filePath,
+                file_size: compressedBlob.size,
+                upload_status: 'processing'
+              }])
+              .select()
+              .single();
 
-        // Record file in database
-        const { data: fileRecord, error: dbError } = await supabase
-          .from('uploaded_files')
-          .insert([
-            {
-              session_id: sessionId,
-              user_id: user?.id,
-              file_name: compressedFileName,
-              file_path: filePath,
-              file_size: compressedBlob.size,
-              upload_status: 'pending' // Will be processed by Edge Function
+            if (dbError) throw dbError;
+
+            // Process data rows in batches
+            const batchSize = 500;
+            let batch: any[] = [];
+            let processedRows = 0;
+            const totalRows = lines.length - 16;
+
+            for (let i = 16; i < lines.length; i++) {
+              const line = lines[i].trim();
+              if (!line) continue;
+
+              const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
+              const row: any = {
+                session_id: sessionId,
+                file_id: fileRecord.id
+              };
+
+              // Map columns
+              headers.forEach((header, idx) => {
+                const dbColumn = columnMap[header];
+                if (dbColumn && values[idx] !== undefined && values[idx] !== '') {
+                  const value = values[idx];
+                  
+                  if (dbColumn === 'gps_time' || dbColumn === 'gps_date') {
+                    row[dbColumn] = value;
+                  } else {
+                    const numValue = parseFloat(value);
+                    if (!isNaN(numValue)) {
+                      row[dbColumn] = numValue;
+                    }
+                  }
+                }
+              });
+
+              batch.push(row);
+              processedRows++;
+
+              // Insert batch
+              if (batch.length >= batchSize) {
+                const { error: insertError } = await supabase
+                  .from('telemetry_data')
+                  .insert(batch);
+
+                if (insertError) throw insertError;
+
+                toast({
+                  title: "Processing...",
+                  description: `Inserted ${processedRows}/${totalRows} rows (${((processedRows/totalRows)*100).toFixed(1)}%)`,
+                });
+
+                batch = [];
+              }
             }
-          ])
-          .select()
-          .single();
 
-        if (dbError) throw dbError;
+            // Insert remaining rows
+            if (batch.length > 0) {
+              const { error: insertError } = await supabase
+                .from('telemetry_data')
+                .insert(batch);
 
-        // Update session with available metrics
-        const { error: sessionError } = await supabase
-          .from('sessions')
-          .update({ available_metrics: metadata })
-          .eq('id', sessionId);
+              if (insertError) throw insertError;
+            }
 
-        if (sessionError) throw sessionError;
+            // Update file status and session metadata
+            await supabase
+              .from('uploaded_files')
+              .update({ upload_status: 'processed' })
+              .eq('id', fileRecord.id);
 
-        toast({
-          title: "Upload Complete",
-          description: `File uploaded with ${metadata.length} metrics. Processing telemetry data...`,
-        });
+            await supabase
+              .from('sessions')
+              .update({ available_metrics: metadata })
+              .eq('id', sessionId);
 
-        // Trigger Edge Function to decompress and insert telemetry data
-        const { data: functionData, error: functionError } = await supabase.functions.invoke('process-telemetry', {
-          body: { fileId: fileRecord.id, sessionId }
-        });
+            toast({
+              title: "Upload Complete",
+              description: `Successfully processed ${processedRows} telemetry records with ${metadata.length} metrics!`,
+            });
 
-        if (functionError) {
-          console.error('Error triggering processing:', functionError);
+            // Refresh
+            fetchSessions();
+            fetchFileStatuses();
+          } catch (error: any) {
+            console.error('Error processing telemetry:', error);
+            toast({
+              title: "Processing Failed",
+              description: error.message || "Failed to process telemetry data.",
+              variant: "destructive",
+            });
+          }
+        };
+
+        reader.onerror = () => {
           toast({
-            title: "Processing Error",
-            description: "File uploaded but telemetry processing failed. Check the file status.",
+            title: "File Read Error",
+            description: "Failed to read the file.",
             variant: "destructive",
           });
-        } else {
-          toast({
-            title: "Processing Started",
-            description: "Telemetry data is being processed in the background.",
-          });
-        }
+        };
 
-        // Refresh
-        fetchSessions();
-        fetchFileStatuses();
+        reader.readAsText(file);
       } catch (error) {
         console.error('Error processing file:', error);
         toast({
