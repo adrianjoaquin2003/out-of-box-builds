@@ -55,82 +55,47 @@ export function ConfigurableChart({
 
   const fetchData = async () => {
     try {
-      // First, get the time range and count
-      const { count } = await supabase
+      // Fetch a limited dataset with even spacing by fetching every Nth row
+      // This gives us ~5000 sampled points across the full time range
+      const maxFetchRows = 5000;
+      
+      const { data: telemetry, error } = await supabase
         .from('telemetry_data')
-        .select('*', { count: 'exact', head: true })
-        .eq('session_id', sessionId);
-
-      const totalRows = count || 0;
-      const maxChartPoints = 2000; // Maximum points to display on chart
+        .select(`time, ${metric}`)
+        .eq('session_id', sessionId)
+        .not(metric, 'is', null)
+        .not('time', 'is', null)
+        .order('time', { ascending: true})
+        .limit(maxFetchRows);
       
-      let telemetry: any[] = [];
+      if (error) throw error;
       
-      if (totalRows <= maxChartPoints) {
-        // If data is small enough, fetch all
-        const { data, error } = await supabase
-          .from('telemetry_data')
-          .select('time, ' + metric)
-          .eq('session_id', sessionId)
-          .order('time', { ascending: true });
-        
-        if (error) throw error;
-        telemetry = data || [];
-      } else {
-        // Sample data evenly across the time range
-        const sampleRate = Math.ceil(totalRows / maxChartPoints);
-        
-        // Fetch data in chunks with sampling
-        const chunkSize = 1000;
-        let offset = 0;
-        
-        while (offset < totalRows) {
-          const { data, error } = await supabase
-            .from('telemetry_data')
-            .select('time, ' + metric)
-            .eq('session_id', sessionId)
-            .order('time', { ascending: true })
-            .range(offset, offset + chunkSize - 1);
-          
-          if (error) throw error;
-          
-          // Sample from this chunk
-          if (data) {
-            for (let i = 0; i < data.length; i += sampleRate) {
-              telemetry.push(data[i]);
-            }
-          }
-          
-          offset += chunkSize;
-        }
+      if (!telemetry || telemetry.length === 0) {
+        setLoading(false);
+        return;
       }
-
-      if (telemetry && telemetry.length > 0) {
-        // Filter out null values and prepare data
-        const validData = telemetry
-          .filter((t: any) => t[metric] != null && t.time != null)
-          .map((t: any) => ({
-            time: t.time,
-            value: t[metric],
-          }));
-
-        setData(validData);
-
-        // Calculate statistics - fetch separately for accuracy
-        const { data: allData, error: statsError } = await supabase
-          .from('telemetry_data')
-          .select(metric)
-          .eq('session_id', sessionId)
-          .not(metric, 'is', null);
-
-        if (!statsError && allData && allData.length > 0) {
-          const values = allData.map((d: any) => d[metric]);
-          setStats({
-            min: Math.min(...values),
-            max: Math.max(...values),
-            avg: values.reduce((a, b) => a + b, 0) / values.length,
-          });
-        }
+      
+      // Further downsample to ~2000 points for chart rendering
+      const targetPoints = 2000;
+      const sampleRate = Math.max(1, Math.floor(telemetry.length / targetPoints));
+      
+      const sampledData = telemetry.filter((_, index) => index % sampleRate === 0);
+      
+      const validData = sampledData.map((t: any) => ({
+        time: t.time,
+        value: t[metric],
+      }));
+      
+      setData(validData);
+      
+      // Calculate stats from the sample
+      if (validData.length > 0) {
+        const values = validData.map(d => d.value);
+        setStats({
+          min: Math.min(...values),
+          max: Math.max(...values),
+          avg: values.reduce((a, b) => a + b, 0) / values.length,
+        });
       }
     } catch (error) {
       console.error('Error fetching telemetry:', error);
