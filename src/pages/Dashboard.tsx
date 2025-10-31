@@ -11,7 +11,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from '@/hooks/use-toast';
 import * as Papa from 'papaparse';
-import * as arrow from 'apache-arrow';
 
 interface Session {
   id: string;
@@ -40,10 +39,19 @@ interface Profile {
   team_name?: string;
 }
 
-// Helper function to convert CSV to Parquet and extract metadata
-const convertCsvToParquet = async (
+// Helper function to compress CSV file using Deflate
+const compressCsvFile = async (file: File): Promise<Blob> => {
+  const arrayBuffer = await file.arrayBuffer();
+  const stream = new Blob([arrayBuffer]).stream();
+  const compressedStream = stream.pipeThrough(new CompressionStream('deflate'));
+  const compressedBlob = await new Response(compressedStream).blob();
+  return compressedBlob;
+};
+
+// Helper function to extract metadata from CSV (client-side parsing)
+const extractCsvMetadata = async (
   file: File
-): Promise<{ parquetBlob: Blob; metadata: Array<{ key: string; label: string; unit: string; category: string }> }> => {
+): Promise<Array<{ key: string; label: string; unit: string; category: string }>> => {
   return new Promise((resolve, reject) => {
     const metricsMap: Record<string, { label: string; unit: string; category: string }> = {
       'time': { label: 'Time', unit: 's', category: 'Timing' },
@@ -59,45 +67,40 @@ const convertCsvToParquet = async (
       'engine_oil_temperature': { label: 'Oil Temperature', unit: '°C', category: 'Engine' },
       'engine_oil_pressure': { label: 'Oil Pressure', unit: 'bar', category: 'Engine' },
       'coolant_temperature': { label: 'Coolant Temperature', unit: '°C', category: 'Engine' },
+      'inlet_air_temperature': { label: 'Inlet Air Temp', unit: '°C', category: 'Engine' },
+      'boost_pressure': { label: 'Boost Pressure', unit: 'bar', category: 'Engine' },
+      'fuel_pressure_sensor': { label: 'Fuel Pressure', unit: 'bar', category: 'Fuel' },
+      'fuel_temperature': { label: 'Fuel Temperature', unit: '°C', category: 'Fuel' },
       'lap_number': { label: 'Lap Number', unit: '', category: 'Lap Data' },
       'lap_time': { label: 'Lap Time', unit: 's', category: 'Lap Data' },
+      'lap_distance': { label: 'Lap Distance', unit: 'm', category: 'Lap Data' },
       'gear': { label: 'Gear', unit: '', category: 'Transmission' },
     };
 
+    // Parse first 1000 rows to detect available metrics
     Papa.parse<Record<string, any>>(file, {
       header: true,
       skipEmptyLines: true,
       dynamicTyping: true,
+      preview: 1000, // Only read first 1000 rows for metadata detection
       complete: (results) => {
         try {
           if (!results.data || results.data.length === 0) {
             throw new Error('No data found in CSV file');
           }
           
-          // Build Arrow schema from CSV headers
-          const firstRow = results.data[0];
-          const fields: arrow.Field[] = [];
           const availableMetrics: Array<{ key: string; label: string; unit: string; category: string }> = [];
-          const columnData: { [key: string]: any[] } = {};
+          const firstRow = results.data[0];
           
           Object.keys(firstRow).forEach(header => {
             const normalizedKey = header.toLowerCase().replace(/ /g, '_');
-            const value = firstRow[header];
             
-            // Determine Arrow type
-            let dataType: arrow.DataType;
-            if (typeof value === 'number') {
-              if (Number.isInteger(value)) {
-                dataType = new arrow.Int32();
-              } else {
-                dataType = new arrow.Float32();
-              }
-            } else {
-              dataType = new arrow.Utf8();
-            }
+            // Check if this field has data in the preview rows
+            const hasData = results.data.some(row => 
+              row[header] !== null && row[header] !== undefined && row[header] !== ''
+            );
             
-            fields.push(arrow.Field.new({ name: normalizedKey, type: dataType, nullable: true }));
-            columnData[normalizedKey] = [];
+            if (!hasData) return; // Skip empty fields
             
             // Track metadata
             if (metricsMap[normalizedKey]) {
@@ -115,31 +118,7 @@ const convertCsvToParquet = async (
             }
           });
           
-          // Fill column data
-          results.data.forEach((row) => {
-            Object.keys(row).forEach(header => {
-              const normalizedKey = header.toLowerCase().replace(/ /g, '_');
-              if (columnData[normalizedKey]) {
-                columnData[normalizedKey].push(row[header] ?? null);
-              }
-            });
-          });
-          
-          // Create Arrow Table using tableFromArrays
-          const table = arrow.tableFromArrays(columnData);
-          
-          // Serialize to Arrow IPC format
-          const writer = arrow.RecordBatchFileWriter.writeAll(table);
-          const buffer = writer.toUint8Array(true);
-          // Ensure we have a proper ArrayBuffer (not SharedArrayBuffer)
-          const copyBuffer = new Uint8Array(buffer.length);
-          copyBuffer.set(buffer);
-          const parquetBlob = new Blob([copyBuffer.buffer], { type: 'application/octet-stream' });
-          
-          resolve({
-            parquetBlob,
-            metadata: availableMetrics
-          });
+          resolve(availableMetrics);
         } catch (error) {
           reject(error);
         }
@@ -326,19 +305,13 @@ const Dashboard = () => {
   const handleFileUpload = async (sessionId: string) => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.csv,.txt,.log,.arrow,.parquet';
+    input.accept = '.csv,.txt,.log';
     input.onchange = async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (!file) return;
-      
-      // Handle pre-converted Arrow/Parquet files
-      if (file.name.endsWith('.arrow') || file.name.endsWith('.parquet')) {
-        await handleParquetUpload(file, sessionId);
-        return;
-      }
 
       // Check file size (500MB limit)
-      const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB in bytes
+      const MAX_FILE_SIZE = 500 * 1024 * 1024;
       if (file.size > MAX_FILE_SIZE) {
         toast({
           title: "File Too Large",
@@ -349,28 +322,36 @@ const Dashboard = () => {
       }
 
       toast({
-        title: "Converting to Parquet",
-        description: `Processing ${file.name}...`,
+        title: "Analyzing File",
+        description: `Reading ${file.name} to detect metrics...`,
       });
 
       try {
-        // Convert CSV to Parquet format and extract metadata (all client-side)
-        const { parquetBlob, metadata } = await convertCsvToParquet(file);
-        const originalSize = file.size / (1024 * 1024);
-        const parquetSize = parquetBlob.size / (1024 * 1024);
-        const compressionRatio = ((1 - parquetBlob.size / file.size) * 100).toFixed(1);
-
+        // Extract metadata client-side (fast, only reads first 1000 rows)
+        const metadata = await extractCsvMetadata(file);
+        
         toast({
-          title: "Conversion Complete",
-          description: `Converted to Parquet: ${originalSize.toFixed(2)}MB → ${parquetSize.toFixed(2)}MB (${compressionRatio}% reduction). Found ${metadata.length} metrics. Uploading...`,
+          title: "Metadata Extracted",
+          description: `Found ${metadata.length} metrics. Compressing file...`,
         });
 
-        // Upload Parquet file to Supabase Storage
-        const parquetFileName = file.name.replace(/\.(csv|txt|log)$/i, '.arrow');
-        const filePath = `${user?.id}/${sessionId}/${Date.now()}_${parquetFileName}`;
+        // Compress the original CSV with deflate
+        const compressedBlob = await compressCsvFile(file);
+        const originalSize = file.size / (1024 * 1024);
+        const compressedSize = compressedBlob.size / (1024 * 1024);
+        const compressionRatio = ((1 - compressedBlob.size / file.size) * 100).toFixed(1);
+
+        toast({
+          title: "Compression Complete",
+          description: `${originalSize.toFixed(2)}MB → ${compressedSize.toFixed(2)}MB (${compressionRatio}% smaller). Uploading...`,
+        });
+
+        // Upload compressed file
+        const compressedFileName = file.name + '.deflate';
+        const filePath = `${user?.id}/${sessionId}/${Date.now()}_${compressedFileName}`;
         const { error: uploadError } = await supabase.storage
           .from('racing-data')
-          .upload(filePath, parquetBlob);
+          .upload(filePath, compressedBlob);
 
         if (uploadError) throw uploadError;
 
@@ -381,10 +362,10 @@ const Dashboard = () => {
             {
               session_id: sessionId,
               user_id: user?.id,
-              file_name: parquetFileName,
+              file_name: compressedFileName,
               file_path: filePath,
-              file_size: parquetBlob.size,
-              upload_status: 'processed' // Already processed client-side!
+              file_size: compressedBlob.size,
+              upload_status: 'processed' // Processed client-side!
             }
           ])
           .select()
@@ -402,72 +383,22 @@ const Dashboard = () => {
 
         toast({
           title: "Upload Complete",
-          description: `Successfully uploaded ${parquetFileName} with ${metadata.length} metrics. Ready to analyze!`,
+          description: `Successfully uploaded with ${metadata.length} metrics. Ready to analyze!`,
         });
 
-        // Refresh sessions and file statuses
+        // Refresh
         fetchSessions();
         fetchFileStatuses();
       } catch (error) {
         console.error('Error processing file:', error);
         toast({
           title: "Upload Failed",
-          description: error.message || "Failed to process file. Please try again.",
+          description: error.message || "Failed to process file.",
           variant: "destructive",
         });
       }
     };
     input.click();
-  };
-
-  const handleParquetUpload = async (file: File, sessionId: string) => {
-    // For pre-converted Parquet/Arrow files, just upload directly
-    // The metadata should already be embedded or provided separately
-    toast({
-      title: "Uploading File",
-      description: `Uploading ${file.name}...`,
-    });
-
-    try {
-      const filePath = `${user?.id}/${sessionId}/${Date.now()}_${file.name}`;
-      const { error: uploadError } = await supabase.storage
-        .from('racing-data')
-        .upload(filePath, file);
-
-      if (uploadError) throw uploadError;
-
-      const { data: fileRecord, error: dbError } = await supabase
-        .from('uploaded_files')
-        .insert([
-          {
-            session_id: sessionId,
-            user_id: user?.id,
-            file_name: file.name,
-            file_path: filePath,
-            file_size: file.size,
-            upload_status: 'processed'
-          }
-        ])
-        .select()
-        .single();
-
-      if (dbError) throw dbError;
-
-      toast({
-        title: "Upload Complete",
-        description: `Successfully uploaded ${file.name}`,
-      });
-
-      fetchSessions();
-      fetchFileStatuses();
-    } catch (error) {
-      console.error('Error uploading file:', error);
-      toast({
-        title: "Upload Failed",
-        description: error.message || "Failed to upload file.",
-        variant: "destructive",
-      });
-    }
   };
 
   const getRoleColor = (role: string) => {
