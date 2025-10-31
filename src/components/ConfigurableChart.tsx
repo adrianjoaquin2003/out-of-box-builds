@@ -64,6 +64,11 @@ export function ConfigurableChart({
 
       if (error) throw error;
       
+      console.log('Telemetry data received:', telemetry?.length, 'rows');
+      if (telemetry && telemetry.length > 0) {
+        console.log('Time range:', telemetry[0].row_time, 'to', telemetry[telemetry.length - 1].row_time);
+      }
+      
       if (!telemetry || telemetry.length === 0) {
         setLoading(false);
         return;
