@@ -109,30 +109,38 @@ async function processData(supabase: any, fileId: string, sessionId: string) {
     if (downloadError) throw downloadError;
     console.log('File downloaded successfully, size:', fileContent.size);
 
-    // Check if file is compressed and decompress if needed
-    let text: string;
+    // Get decompression stream based on file type
+    let stream: ReadableStream<Uint8Array>;
     if (fileData.file_name.endsWith('.deflate')) {
-      console.log('Decompressing deflate file...');
-      const decompressedStream = fileContent.stream().pipeThrough(new DecompressionStream('deflate'));
-      const decompressedBlob = await new Response(decompressedStream).blob();
-      text = await decompressedBlob.text();
-      console.log('Decompression complete, text length:', text.length);
+      console.log('Setting up deflate decompression stream...');
+      stream = fileContent.stream().pipeThrough(new DecompressionStream('deflate'));
     } else if (fileData.file_name.endsWith('.gz')) {
-      console.log('Decompressing gzip file...');
-      const decompressedStream = fileContent.stream().pipeThrough(new DecompressionStream('gzip'));
-      const decompressedBlob = await new Response(decompressedStream).blob();
-      text = await decompressedBlob.text();
-      console.log('Decompression complete, text length:', text.length);
+      console.log('Setting up gzip decompression stream...');
+      stream = fileContent.stream().pipeThrough(new DecompressionStream('gzip'));
     } else if (fileData.file_name.endsWith('.parquet')) {
       console.log('Parquet files not yet supported in edge function');
       throw new Error('Parquet processing not implemented. Please use CSV files.');
     } else {
-      text = await fileContent.text();
+      stream = fileContent.stream();
     }
+
+    // Read only first 10KB to extract headers
+    const reader = stream.getReader();
+    const decoder = new TextDecoder();
+    let headerText = '';
+    let bytesRead = 0;
+    const maxHeaderBytes = 10000;
     
-    // Split only the first 20 lines to get headers and metadata
-    const firstLines = text.substring(0, Math.min(10000, text.length)).split('\n');
-    console.log('First few lines count:', firstLines.length);
+    while (bytesRead < maxHeaderBytes) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      headerText += decoder.decode(value, { stream: true });
+      bytesRead += value.length;
+    }
+    reader.releaseLock();
+    
+    const firstLines = headerText.split('\n');
+    console.log('Read first', firstLines.length, 'lines for headers');
 
     // MoTeC CSV format: metadata ends at line 14, column names at line 15, units at line 16, data starts at line 17
     if (firstLines.length < 17) {
@@ -200,29 +208,55 @@ async function processData(supabase: any, fileId: string, sessionId: string) {
       'Dash Temp': 'dash_temp'
     };
 
-    // Process data rows incrementally to avoid memory issues
+    // Re-download and process data rows line-by-line via stream
     console.log('Starting to process data rows...');
+    const { data: fileContent2, error: downloadError2 } = await supabase
+      .storage
+      .from('racing-data')
+      .download(fileData.file_path);
+    
+    if (downloadError2) throw downloadError2;
+    
+    // Get decompression stream again
+    let dataStream: ReadableStream<Uint8Array>;
+    if (fileData.file_name.endsWith('.deflate')) {
+      dataStream = fileContent2.stream().pipeThrough(new DecompressionStream('deflate'));
+    } else if (fileData.file_name.endsWith('.gz')) {
+      dataStream = fileContent2.stream().pipeThrough(new DecompressionStream('gzip'));
+    } else {
+      dataStream = fileContent2.stream();
+    }
+    
     let processedRows = 0;
     let insertedRows = 0;
-    const batchSize = 500; // Smaller batches to reduce memory usage
+    const batchSize = 100; // Reduced batch size for large files
     let currentBatch: TelemetryRow[] = [];
     const fieldsWithData = new Set<string>();
     
-    // Split text into lines incrementally
-    let startPos = 0;
+    // Process stream line by line
+    const streamReader = dataStream.getReader();
+    const streamDecoder = new TextDecoder();
+    let buffer = '';
     let lineCount = 0;
+    let done = false;
     
-    while (startPos < text.length) {
-      // Find next newline
-      let endPos = text.indexOf('\n', startPos);
-      if (endPos === -1) endPos = text.length;
+    while (!done) {
+      const { done: streamDone, value } = await streamReader.read();
+      done = streamDone;
       
-      const line = text.substring(startPos, endPos).trim();
-      startPos = endPos + 1;
-      lineCount++;
+      if (value) {
+        buffer += streamDecoder.decode(value, { stream: !done });
+      }
       
-      // Skip metadata and header lines (first 16 lines)
-      if (lineCount <= 16 || !line) continue;
+      // Process complete lines from buffer
+      let newlineIndex;
+      while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
+        const line = buffer.substring(0, newlineIndex).trim();
+        buffer = buffer.substring(newlineIndex + 1);
+        lineCount++;
+        
+        // Skip metadata and header lines (first 16 lines)
+        if (lineCount <= 16 || !line) continue;
       
       const values = line.split(',').map(v => v.trim());
       const row: TelemetryRow = {
@@ -269,23 +303,39 @@ async function processData(supabase: any, fileId: string, sessionId: string) {
         });
       }
 
-      currentBatch.push(row);
-      processedRows++;
-
-      // Insert batch when it reaches batchSize
-      if (currentBatch.length >= batchSize) {
-        const { error: insertError } = await supabase
-          .from('telemetry_data')
-          .insert(currentBatch);
-
-        if (insertError) {
-          console.error('Error inserting batch:', insertError);
-          throw insertError;
-        }
+        currentBatch.push(row);
+        processedRows++;
         
-        insertedRows += currentBatch.length;
-        console.log(`Inserted ${insertedRows} rows (${Math.round(insertedRows / processedRows * 100)}% of processed)`);
-        currentBatch = []; // Clear batch to free memory
+        // Log progress every 5000 rows
+        if (processedRows % 5000 === 0) {
+          console.log(`Processed ${processedRows} rows, inserted ${insertedRows} rows...`);
+        }
+
+        // Insert batch when it reaches batchSize
+        if (currentBatch.length >= batchSize) {
+          const { error: insertError } = await supabase
+            .from('telemetry_data')
+            .insert(currentBatch);
+
+          if (insertError) {
+            console.error('Error inserting batch:', insertError);
+            throw insertError;
+          }
+          
+          insertedRows += currentBatch.length;
+          currentBatch = []; // Clear batch to free memory
+          
+          // Update progress every 10 batches
+          if (insertedRows % 1000 === 0) {
+            await supabase
+              .from('uploaded_files')
+              .update({ 
+                upload_status: 'processing',
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', fileId);
+          }
+        }
       }
     }
 
