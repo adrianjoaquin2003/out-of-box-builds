@@ -124,17 +124,10 @@ const extractCsvMetadata = async (
         headers.forEach((header, idx) => {
           const normalizedKey = header.toLowerCase().replace(/ /g, '_');
           
-          // Check if this field has data in the sample rows
-          const hasData = sampleRows.some(row => 
-            row[header] !== null && row[header] !== undefined && row[header] !== ''
-          );
-          
-          if (!hasData) return; // Skip empty fields
-          
           // Get unit for this field
           const unit = units[idx] || '';
           
-          // Track metadata
+          // Track metadata - assume all columns have data
           if (metricsMap[normalizedKey]) {
             availableMetrics.push({
               key: normalizedKey,
