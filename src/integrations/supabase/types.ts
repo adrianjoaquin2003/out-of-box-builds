@@ -496,6 +496,13 @@ export type Database = {
         Args: { check_team_id: string; check_user_id: string }
         Returns: boolean
       }
+      sample_telemetry_data: {
+        Args: { p_metric: string; p_sample_size?: number; p_session_id: string }
+        Returns: {
+          row_time: number
+          row_value: number
+        }[]
+      }
     }
     Enums: {
       bid_status: "pending" | "accepted" | "rejected" | "withdrawn"

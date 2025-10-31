@@ -55,19 +55,13 @@ export function ConfigurableChart({
 
   const fetchData = async () => {
     try {
-      // Fetch a limited dataset with even spacing by fetching every Nth row
-      // This gives us ~5000 sampled points across the full time range
-      const maxFetchRows = 5000;
-      
-      const { data: telemetry, error } = await supabase
-        .from('telemetry_data')
-        .select(`time, ${metric}`)
-        .eq('session_id', sessionId)
-        .not(metric, 'is', null)
-        .not('time', 'is', null)
-        .order('time', { ascending: true})
-        .limit(maxFetchRows);
-      
+      // Use the database function to efficiently sample data across full time range
+      const { data: telemetry, error } = await supabase.rpc('sample_telemetry_data', {
+        p_session_id: sessionId,
+        p_metric: metric,
+        p_sample_size: 2000
+      });
+
       if (error) throw error;
       
       if (!telemetry || telemetry.length === 0) {
@@ -75,15 +69,9 @@ export function ConfigurableChart({
         return;
       }
       
-      // Further downsample to ~2000 points for chart rendering
-      const targetPoints = 2000;
-      const sampleRate = Math.max(1, Math.floor(telemetry.length / targetPoints));
-      
-      const sampledData = telemetry.filter((_, index) => index % sampleRate === 0);
-      
-      const validData = sampledData.map((t: any) => ({
-        time: t.time,
-        value: t[metric],
+      const validData = telemetry.map((t: any) => ({
+        time: t.row_time,
+        value: t.row_value,
       }));
       
       setData(validData);
