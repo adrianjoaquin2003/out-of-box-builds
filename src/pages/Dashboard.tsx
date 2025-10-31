@@ -185,12 +185,12 @@ const Dashboard = () => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (!file) return;
 
-      // Check file size (100MB limit)
-      const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB in bytes
+      // Check file size (500MB limit)
+      const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB in bytes
       if (file.size > MAX_FILE_SIZE) {
         toast({
           title: "File Too Large",
-          description: `File size is ${(file.size / (1024 * 1024)).toFixed(2)}MB. Maximum allowed size is 100MB.`,
+          description: `File size is ${(file.size / (1024 * 1024)).toFixed(2)}MB. Maximum allowed size is 500MB.`,
           variant: "destructive",
         });
         return;
