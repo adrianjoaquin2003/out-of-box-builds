@@ -10,6 +10,8 @@ import { Plus, Upload, BarChart3, Timer, Zap, LogOut, FileText, LayoutDashboard,
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from '@/hooks/use-toast';
+import { ParquetReader } from 'parquetjs';
+import { Buffer } from 'buffer';
 
 interface Session {
   id: string;
@@ -38,13 +40,68 @@ interface Profile {
   team_name?: string;
 }
 
-// Helper function to compress CSV file using Brotli (better compression than gzip)
+// Helper function to compress CSV file using Deflate
 const compressCsvFile = async (file: File): Promise<Blob> => {
   const arrayBuffer = await file.arrayBuffer();
   const stream = new Blob([arrayBuffer]).stream();
   const compressedStream = stream.pipeThrough(new CompressionStream('deflate'));
   const compressedBlob = await new Response(compressedStream).blob();
   return compressedBlob;
+};
+
+// Helper function to extract metadata from Parquet file
+const extractParquetMetadata = async (file: File): Promise<Array<{ key: string; label: string; unit: string; category: string }>> => {
+  const arrayBuffer = await file.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+  
+  try {
+    const reader = await ParquetReader.openBuffer(buffer);
+    const schema = reader.getSchema();
+    const fields = schema.fieldList;
+    
+    // Map common racing telemetry field names to categories
+    const metricsMap: Record<string, { label: string; unit: string; category: string }> = {
+      'time': { label: 'Time', unit: 's', category: 'Timing' },
+      'ground_speed': { label: 'Speed', unit: 'km/h', category: 'Performance' },
+      'gps_speed': { label: 'GPS Speed', unit: 'km/h', category: 'Performance' },
+      'drive_speed': { label: 'Drive Speed', unit: 'km/h', category: 'Performance' },
+      'engine_speed': { label: 'Engine RPM', unit: 'RPM', category: 'Engine' },
+      'throttle_position': { label: 'Throttle Position', unit: '%', category: 'Driver Input' },
+      'throttle_pedal': { label: 'Throttle Pedal', unit: '%', category: 'Driver Input' },
+      'g_force_lat': { label: 'Lateral G-Force', unit: 'G', category: 'Forces' },
+      'g_force_long': { label: 'Longitudinal G-Force', unit: 'G', category: 'Forces' },
+      'g_force_vert': { label: 'Vertical G-Force', unit: 'G', category: 'Forces' },
+      'lap_number': { label: 'Lap Number', unit: '', category: 'Lap Data' },
+      'lap_time': { label: 'Lap Time', unit: 's', category: 'Lap Data' },
+      'gear': { label: 'Gear', unit: '', category: 'Transmission' },
+    };
+    
+    const availableMetrics: Array<{ key: string; label: string; unit: string; category: string }> = [];
+    
+    fields.forEach(field => {
+      const fieldName = field.name.toLowerCase().replace(/ /g, '_');
+      if (metricsMap[fieldName]) {
+        availableMetrics.push({
+          key: fieldName,
+          ...metricsMap[fieldName]
+        });
+      } else if (!['session_id', 'file_id', 'id'].includes(fieldName)) {
+        // Add unknown fields with basic metadata
+        availableMetrics.push({
+          key: fieldName,
+          label: field.name,
+          unit: '',
+          category: 'Other'
+        });
+      }
+    });
+    
+    await reader.close();
+    return availableMetrics;
+  } catch (error) {
+    console.error('Error reading Parquet metadata:', error);
+    throw new Error('Failed to read Parquet file metadata');
+  }
 };
 
 const Dashboard = () => {
@@ -222,10 +279,16 @@ const Dashboard = () => {
   const handleFileUpload = async (sessionId: string) => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.csv,.txt,.log';
+    input.accept = '.csv,.txt,.log,.parquet';
     input.onchange = async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (!file) return;
+      
+      // Handle Parquet files differently
+      if (file.name.endsWith('.parquet')) {
+        await handleParquetUpload(file, sessionId);
+        return;
+      }
 
       // Check file size (500MB limit)
       const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB in bytes
@@ -323,6 +386,84 @@ const Dashboard = () => {
       }
     };
     input.click();
+  };
+
+  const handleParquetUpload = async (file: File, sessionId: string) => {
+    // Check file size (500MB limit)
+    const MAX_FILE_SIZE = 500 * 1024 * 1024;
+    if (file.size > MAX_FILE_SIZE) {
+      toast({
+        title: "File Too Large",
+        description: `File size is ${(file.size / (1024 * 1024)).toFixed(2)}MB. Maximum allowed size is 500MB.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    toast({
+      title: "Processing Parquet File",
+      description: "Extracting metadata from Parquet file...",
+    });
+
+    try {
+      // Extract metadata from Parquet file in browser
+      const availableMetrics = await extractParquetMetadata(file);
+      
+      toast({
+        title: "Metadata Extracted",
+        description: `Found ${availableMetrics.length} metrics. Uploading file...`,
+      });
+
+      // Upload Parquet file to Supabase Storage
+      const filePath = `${user?.id}/${sessionId}/${Date.now()}_${file.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from('racing-data')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      // Record file in database
+      const { data: fileRecord, error: dbError } = await supabase
+        .from('uploaded_files')
+        .insert([
+          {
+            session_id: sessionId,
+            user_id: user?.id,
+            file_name: file.name,
+            file_path: filePath,
+            file_size: file.size,
+            upload_status: 'processed' // Mark as processed since we already extracted metadata
+          }
+        ])
+        .select()
+        .single();
+
+      if (dbError) throw dbError;
+
+      // Update session with available metrics
+      const { error: sessionError } = await supabase
+        .from('sessions')
+        .update({ available_metrics: availableMetrics })
+        .eq('id', sessionId);
+
+      if (sessionError) throw sessionError;
+
+      toast({
+        title: "Upload Complete",
+        description: `Successfully uploaded ${file.name} with ${availableMetrics.length} metrics.`,
+      });
+
+      // Refresh sessions and file statuses
+      fetchSessions();
+      fetchFileStatuses();
+    } catch (error) {
+      console.error('Error uploading Parquet file:', error);
+      toast({
+        title: "Upload Failed",
+        description: error.message || "Failed to upload Parquet file. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const getRoleColor = (role: string) => {
