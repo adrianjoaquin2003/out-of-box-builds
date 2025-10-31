@@ -6,9 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, Upload, BarChart3, Timer, Zap, LogOut, FileText, LayoutDashboard, Users, AlertTriangle } from 'lucide-react';
+import { Plus, Upload, BarChart3, Timer, Zap, LogOut, FileText, LayoutDashboard, Users } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from '@/hooks/use-toast';
 
@@ -50,7 +49,6 @@ const Dashboard = () => {
   const [reportDialogOpen, setReportDialogOpen] = useState(false);
   const [selectedSessionForReport, setSelectedSessionForReport] = useState<string | null>(null);
   const [savedReports, setSavedReports] = useState<Array<{ id: string; name: string }>>([]);
-  const [isClearing, setIsClearing] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -333,98 +331,6 @@ const Dashboard = () => {
     setReportDialogOpen(false);
   };
 
-  const handleClearAllData = async () => {
-    if (!user || !team) return;
-    
-    setIsClearing(true);
-    try {
-      // Get all dashboard IDs for this team
-      const { data: teamDashboards } = await supabase
-        .from('dashboards')
-        .select('id')
-        .eq('team_id', team.id);
-
-      const dashboardIds = teamDashboards?.map(d => d.id) || [];
-
-      // Get all session IDs for this team
-      const { data: teamSessions } = await supabase
-        .from('sessions')
-        .select('id')
-        .eq('team_id', team.id);
-
-      const sessionIds = teamSessions?.map(s => s.id) || [];
-
-      if (dashboardIds.length > 0) {
-        // Delete dashboard reports
-        await supabase
-          .from('dashboard_reports')
-          .delete()
-          .in('dashboard_id', dashboardIds);
-      }
-
-      if (sessionIds.length > 0) {
-        // Delete saved reports
-        await supabase
-          .from('saved_reports')
-          .delete()
-          .in('session_id', sessionIds);
-
-        // Delete telemetry data
-        await supabase
-          .from('telemetry_data')
-          .delete()
-          .in('session_id', sessionIds);
-
-        // Delete uploaded files records
-        await supabase
-          .from('uploaded_files')
-          .delete()
-          .in('session_id', sessionIds);
-      }
-
-      // Delete dashboards
-      await supabase
-        .from('dashboards')
-        .delete()
-        .eq('team_id', team.id);
-
-      // Delete sessions
-      await supabase
-        .from('sessions')
-        .delete()
-        .eq('team_id', team.id);
-
-      // Clear storage bucket for this user
-      const { data: storageFiles } = await supabase.storage
-        .from('racing-data')
-        .list(user.id);
-
-      if (storageFiles && storageFiles.length > 0) {
-        const filePaths = storageFiles.map(file => `${user.id}/${file.name}`);
-        await supabase.storage
-          .from('racing-data')
-          .remove(filePaths);
-      }
-
-      // Refresh sessions list
-      setSessions([]);
-      
-      toast({
-        title: "All Data Cleared",
-        description: "All sessions, telemetry, reports, and dashboards have been deleted.",
-      });
-    } catch (error: any) {
-      console.error('Error clearing data:', error);
-      toast({
-        title: "Clear Failed",
-        description: error.message || "Failed to clear data",
-        variant: "destructive",
-      });
-    } finally {
-      setIsClearing(false);
-    }
-  };
-
   if (loading || teamLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -508,34 +414,10 @@ const Dashboard = () => {
                 Analyze your racing performance with professional-grade telemetry tools.
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              <Button onClick={() => navigate('/dashboards')} variant="outline" size="lg">
-                <LayoutDashboard className="h-5 w-5 mr-2" />
-                View Dashboards
-              </Button>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="destructive" size="lg">
-                    <AlertTriangle className="h-5 w-5 mr-2" />
-                    Clear All Data
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This will permanently delete all sessions, telemetry data, reports, dashboards, and uploaded files for your team. This action cannot be undone.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleClearAllData} disabled={isClearing}>
-                      {isClearing ? "Clearing..." : "Delete Everything"}
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </div>
+            <Button onClick={() => navigate('/dashboards')} variant="outline" size="lg">
+              <LayoutDashboard className="h-5 w-5 mr-2" />
+              View Dashboards
+            </Button>
           </div>
           
           {/* Quick Stats */}
