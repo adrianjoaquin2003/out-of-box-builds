@@ -122,10 +122,10 @@ const extractCsvMetadata = async (
         const availableMetrics: Array<{ key: string; label: string; unit: string; category: string }> = [];
         
         headers.forEach((header, idx) => {
-          const normalizedKey = header.toLowerCase().replace(/ /g, '_');
+          const normalizedKey = header.toLowerCase().replace(/ /g, '_').replace(/\//g, '_');
           
-          // Get unit for this field
-          const unit = units[idx] || '';
+          // Get unit for this field - remove any quotes from the unit
+          const unit = (units[idx] || '').replace(/"/g, '');
           
           // Track metadata - assume all columns have data
           if (metricsMap[normalizedKey]) {
@@ -136,7 +136,7 @@ const extractCsvMetadata = async (
           } else if (!['session_id', 'file_id', 'id'].includes(normalizedKey)) {
             availableMetrics.push({
               key: normalizedKey,
-              label: header,
+              label: header.replace(/"/g, ''),
               unit: unit,
               category: 'Other'
             });
