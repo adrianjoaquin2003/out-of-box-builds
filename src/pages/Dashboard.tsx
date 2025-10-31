@@ -94,11 +94,11 @@ const extractCsvMetadata = async (
         
         // Extract column headers from line 15 (index 14)
         const headerLine = lines[14];
-        const headers = headerLine.split(',').map(h => h.trim());
+        const headers = headerLine.split(',').map(h => h.trim().replace(/"/g, ''));
         
         // Extract units from line 16 (index 15) if available
         const unitsLine = lines[15];
-        const units = unitsLine.split(',').map(u => u.trim());
+        const units = unitsLine.split(',').map(u => u.trim().replace(/"/g, ''));
         
         // Parse a sample of data rows (lines 17-1017) to detect which fields have data
         const sampleRows: Record<string, any>[] = [];
@@ -106,7 +106,7 @@ const extractCsvMetadata = async (
           const line = lines[i].trim();
           if (!line) continue;
           
-          const values = line.split(',').map(v => v.trim());
+          const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
           const row: Record<string, any> = {};
           
           headers.forEach((header, idx) => {
@@ -122,10 +122,10 @@ const extractCsvMetadata = async (
         const availableMetrics: Array<{ key: string; label: string; unit: string; category: string }> = [];
         
         headers.forEach((header, idx) => {
-          const normalizedKey = header.toLowerCase().replace(/ /g, '_').replace(/\//g, '_');
+          const normalizedKey = header.toLowerCase().replace(/\s+/g, '_').replace(/[^\w_]/g, '_');
           
           // Get unit for this field - remove any quotes from the unit
-          const unit = (units[idx] || '').replace(/"/g, '');
+          const unit = units[idx] || '';
           
           // Track metadata - assume all columns have data
           if (metricsMap[normalizedKey]) {
@@ -136,7 +136,7 @@ const extractCsvMetadata = async (
           } else if (!['session_id', 'file_id', 'id'].includes(normalizedKey)) {
             availableMetrics.push({
               key: normalizedKey,
-              label: header.replace(/"/g, ''),
+              label: header,
               unit: unit,
               category: 'Other'
             });
@@ -451,6 +451,12 @@ const Dashboard = () => {
             let processedRows = 0;
             const totalRows = lines.length - 16;
 
+            // Show initial progress
+            toast({
+              title: "Processing Data",
+              description: `Processing ${totalRows.toLocaleString()} telemetry records...`,
+            });
+
             for (let i = 16; i < lines.length; i++) {
               const line = lines[i].trim();
               if (!line) continue;
@@ -488,11 +494,6 @@ const Dashboard = () => {
                   .insert(batch);
 
                 if (insertError) throw insertError;
-
-                toast({
-                  title: "Processing...",
-                  description: `Inserted ${processedRows}/${totalRows} rows (${((processedRows/totalRows)*100).toFixed(1)}%)`,
-                });
 
                 batch = [];
               }
