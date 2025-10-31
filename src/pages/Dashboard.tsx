@@ -75,58 +75,89 @@ const extractCsvMetadata = async (
       'lap_time': { label: 'Lap Time', unit: 's', category: 'Lap Data' },
       'lap_distance': { label: 'Lap Distance', unit: 'm', category: 'Lap Data' },
       'gear': { label: 'Gear', unit: '', category: 'Transmission' },
+      'bat_volts_ecu': { label: 'Battery ECU', unit: 'V', category: 'Electrical' },
+      'bat_volts_dash': { label: 'Battery Dash', unit: 'V', category: 'Electrical' },
     };
 
-    // Parse first 1000 rows to detect available metrics
-    Papa.parse<Record<string, any>>(file, {
-      header: true,
-      skipEmptyLines: true,
-      dynamicTyping: true,
-      preview: 1000, // Only read first 1000 rows for metadata detection
-      complete: (results) => {
-        try {
-          if (!results.data || results.data.length === 0) {
-            throw new Error('No data found in CSV file');
-          }
+    // Read the file as text to detect MoTeC format and extract headers manually
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const text = e.target?.result as string;
+        const lines = text.split('\n');
+        
+        // MoTeC CSV format: metadata lines 1-14, headers at line 15, units at line 16, data starts at line 17
+        if (lines.length < 17) {
+          reject(new Error('File too short to be valid telemetry data'));
+          return;
+        }
+        
+        // Extract column headers from line 15 (index 14)
+        const headerLine = lines[14];
+        const headers = headerLine.split(',').map(h => h.trim());
+        
+        // Extract units from line 16 (index 15) if available
+        const unitsLine = lines[15];
+        const units = unitsLine.split(',').map(u => u.trim());
+        
+        // Parse a sample of data rows (lines 17-1017) to detect which fields have data
+        const sampleRows: Record<string, any>[] = [];
+        for (let i = 16; i < Math.min(lines.length, 1016); i++) {
+          const line = lines[i].trim();
+          if (!line) continue;
           
-          const availableMetrics: Array<{ key: string; label: string; unit: string; category: string }> = [];
-          const firstRow = results.data[0];
+          const values = line.split(',').map(v => v.trim());
+          const row: Record<string, any> = {};
           
-          Object.keys(firstRow).forEach(header => {
-            const normalizedKey = header.toLowerCase().replace(/ /g, '_');
-            
-            // Check if this field has data in the preview rows
-            const hasData = results.data.some(row => 
-              row[header] !== null && row[header] !== undefined && row[header] !== ''
-            );
-            
-            if (!hasData) return; // Skip empty fields
-            
-            // Track metadata
-            if (metricsMap[normalizedKey]) {
-              availableMetrics.push({
-                key: normalizedKey,
-                ...metricsMap[normalizedKey]
-              });
-            } else if (!['session_id', 'file_id', 'id'].includes(normalizedKey)) {
-              availableMetrics.push({
-                key: normalizedKey,
-                label: header,
-                unit: '',
-                category: 'Other'
-              });
+          headers.forEach((header, idx) => {
+            if (values[idx] !== undefined && values[idx] !== '') {
+              row[header] = values[idx];
             }
           });
           
-          resolve(availableMetrics);
-        } catch (error) {
-          reject(error);
+          sampleRows.push(row);
         }
-      },
-      error: (error) => {
+        
+        // Build available metrics list
+        const availableMetrics: Array<{ key: string; label: string; unit: string; category: string }> = [];
+        
+        headers.forEach((header, idx) => {
+          const normalizedKey = header.toLowerCase().replace(/ /g, '_');
+          
+          // Check if this field has data in the sample rows
+          const hasData = sampleRows.some(row => 
+            row[header] !== null && row[header] !== undefined && row[header] !== ''
+          );
+          
+          if (!hasData) return; // Skip empty fields
+          
+          // Get unit for this field
+          const unit = units[idx] || '';
+          
+          // Track metadata
+          if (metricsMap[normalizedKey]) {
+            availableMetrics.push({
+              key: normalizedKey,
+              ...metricsMap[normalizedKey]
+            });
+          } else if (!['session_id', 'file_id', 'id'].includes(normalizedKey)) {
+            availableMetrics.push({
+              key: normalizedKey,
+              label: header,
+              unit: unit,
+              category: 'Other'
+            });
+          }
+        });
+        
+        resolve(availableMetrics);
+      } catch (error) {
         reject(error);
       }
-    });
+    };
+    
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.readAsText(file);
   });
 };
 
