@@ -116,13 +116,13 @@ async function processData(supabase: any, fileId: string, sessionId: string) {
       const decompressedStream = fileContent.stream().pipeThrough(new DecompressionStream('deflate'));
       const decompressedBlob = await new Response(decompressedStream).blob();
       text = await decompressedBlob.text();
-      console.log('Decompression complete');
+      console.log('Decompression complete, text length:', text.length);
     } else if (fileData.file_name.endsWith('.gz')) {
       console.log('Decompressing gzip file...');
       const decompressedStream = fileContent.stream().pipeThrough(new DecompressionStream('gzip'));
       const decompressedBlob = await new Response(decompressedStream).blob();
       text = await decompressedBlob.text();
-      console.log('Decompression complete');
+      console.log('Decompression complete, text length:', text.length);
     } else if (fileData.file_name.endsWith('.parquet')) {
       console.log('Parquet files not yet supported in edge function');
       throw new Error('Parquet processing not implemented. Please use CSV files.');
@@ -130,20 +130,21 @@ async function processData(supabase: any, fileId: string, sessionId: string) {
       text = await fileContent.text();
     }
     
-    const lines = text.split('\n').map(line => line.trim()).filter(line => line);
-    console.log('Total lines in file:', lines.length);
+    // Split only the first 20 lines to get headers and metadata
+    const firstLines = text.substring(0, Math.min(10000, text.length)).split('\n');
+    console.log('First few lines count:', firstLines.length);
 
     // MoTeC CSV format: metadata ends at line 14, column names at line 15, units at line 16, data starts at line 17
-    if (lines.length < 17) {
+    if (firstLines.length < 17) {
       throw new Error('File too short to be a valid MoTeC CSV');
     }
 
     // Parse column names from line 15 (index 14)
-    const headerLine = lines[14];
+    const headerLine = firstLines[14];
     const headers = headerLine.split(',').map(h => h.trim());
     
     // Parse units from line 16 (index 15)
-    const unitsLine = lines[15];
+    const unitsLine = firstLines[15];
     const units = unitsLine.split(',').map(u => u.trim());
     
     console.log('CSV Headers (first 10):', headers.slice(0, 10));
@@ -199,12 +200,30 @@ async function processData(supabase: any, fileId: string, sessionId: string) {
       'Dash Temp': 'dash_temp'
     };
 
-    // Parse data rows (starting from line 17, index 16)
-    const telemetryData: TelemetryRow[] = [];
-    for (let i = 16; i < lines.length; i++) {
-      const line = lines[i];
-      if (!line) continue;
-
+    // Process data rows incrementally to avoid memory issues
+    console.log('Starting to process data rows...');
+    let processedRows = 0;
+    let insertedRows = 0;
+    const batchSize = 500; // Smaller batches to reduce memory usage
+    let currentBatch: TelemetryRow[] = [];
+    const fieldsWithData = new Set<string>();
+    
+    // Split text into lines incrementally
+    let startPos = 0;
+    let lineCount = 0;
+    
+    while (startPos < text.length) {
+      // Find next newline
+      let endPos = text.indexOf('\n', startPos);
+      if (endPos === -1) endPos = text.length;
+      
+      const line = text.substring(startPos, endPos).trim();
+      startPos = endPos + 1;
+      lineCount++;
+      
+      // Skip metadata and header lines (first 16 lines)
+      if (lineCount <= 16 || !line) continue;
+      
       const values = line.split(',').map(v => v.trim());
       const row: TelemetryRow = {
         session_id: sessionId,
@@ -230,15 +249,9 @@ async function processData(supabase: any, fileId: string, sessionId: string) {
               // Convert speed units to km/h
               if ((dbColumn === 'ground_speed' || dbColumn === 'gps_speed' || dbColumn === 'drive_speed')) {
                 if (unit.toLowerCase() === 'm/s') {
-                  numValue = numValue * 3.6; // m/s to km/h
-                } else if (unit.toLowerCase() === 'mph') {
-                  numValue = numValue * 1.60934; // mph to km/h
-                } else if (unit.toLowerCase().includes('km/h') || unit.toLowerCase().includes('kph')) {
-                  // Already in km/h, no conversion needed
-                } else {
-                  // If unit is unknown, assume it needs conversion from m/s (common default)
-                  console.log(`Unknown speed unit '${unit}' for ${header}, assuming m/s`);
                   numValue = numValue * 3.6;
+                } else if (unit.toLowerCase() === 'mph') {
+                  numValue = numValue * 1.60934;
                 }
               }
               row[dbColumn] = numValue;
@@ -247,12 +260,51 @@ async function processData(supabase: any, fileId: string, sessionId: string) {
         }
       }
 
-      telemetryData.push(row);
+      // Track fields with data (for first 100 rows)
+      if (processedRows < 100) {
+        Object.keys(row).forEach(key => {
+          if (key !== 'session_id' && key !== 'file_id' && row[key] !== null && row[key] !== undefined) {
+            fieldsWithData.add(key);
+          }
+        });
+      }
+
+      currentBatch.push(row);
+      processedRows++;
+
+      // Insert batch when it reaches batchSize
+      if (currentBatch.length >= batchSize) {
+        const { error: insertError } = await supabase
+          .from('telemetry_data')
+          .insert(currentBatch);
+
+        if (insertError) {
+          console.error('Error inserting batch:', insertError);
+          throw insertError;
+        }
+        
+        insertedRows += currentBatch.length;
+        console.log(`Inserted ${insertedRows} rows (${Math.round(insertedRows / processedRows * 100)}% of processed)`);
+        currentBatch = []; // Clear batch to free memory
+      }
     }
 
-    console.log('Parsed', telemetryData.length, 'telemetry records');
+    // Insert remaining rows
+    if (currentBatch.length > 0) {
+      const { error: insertError } = await supabase
+        .from('telemetry_data')
+        .insert(currentBatch);
 
-    if (telemetryData.length === 0) {
+      if (insertError) {
+        console.error('Error inserting final batch:', insertError);
+        throw insertError;
+      }
+      insertedRows += currentBatch.length;
+    }
+
+    console.log('Parsed and inserted', insertedRows, 'telemetry records');
+
+    if (insertedRows === 0) {
       throw new Error('No valid telemetry data found in file');
     }
 
@@ -294,20 +346,7 @@ async function processData(supabase: any, fileId: string, sessionId: string) {
       gps_heading: { label: 'GPS Heading', unit: '°', category: 'GPS' },
     };
 
-    // Check first 100 rows to see which fields have data
-    const sampleSize = Math.min(100, telemetryData.length);
-    const fieldsWithData = new Set<string>();
-    
-    for (let i = 0; i < sampleSize; i++) {
-      const row = telemetryData[i];
-      Object.keys(row).forEach(key => {
-        if (key !== 'session_id' && key !== 'file_id' && row[key] !== null && row[key] !== undefined) {
-          fieldsWithData.add(key);
-        }
-      });
-    }
-
-    // Build available metrics list
+    // Build available metrics list (fieldsWithData already populated during processing)
     fieldsWithData.forEach(field => {
       if (metricsMap[field]) {
         availableMetrics.push({
@@ -326,21 +365,6 @@ async function processData(supabase: any, fileId: string, sessionId: string) {
     });
 
     console.log('Detected available metrics:', availableMetrics.map(m => m.key));
-
-    // Insert in batches of 1000
-    const batchSize = 1000;
-    for (let i = 0; i < telemetryData.length; i += batchSize) {
-      const batch = telemetryData.slice(i, i + batchSize);
-      const { error: insertError } = await supabase
-        .from('telemetry_data')
-        .insert(batch);
-
-      if (insertError) {
-        console.error('Error inserting batch:', insertError);
-        throw insertError;
-      }
-      console.log(`Inserted batch ${Math.floor(i / batchSize) + 1} of ${Math.ceil(telemetryData.length / batchSize)}`);
-    }
 
     // Update session with available metrics
     await supabase
