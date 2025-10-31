@@ -59,8 +59,7 @@ export function ConfigurableChart({
         .from('telemetry_data')
         .select('*')
         .eq('session_id', sessionId)
-        .order('time', { ascending: true })
-        .limit(2000);
+        .order('time', { ascending: true });
 
       if (error) throw error;
 
