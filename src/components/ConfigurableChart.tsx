@@ -56,11 +56,15 @@ export function ConfigurableChart({
   const fetchData = async () => {
     try {
       // Use the database function to efficiently sample data across full time range
+      // Set head to true and use Range header to get more than the default 1000 rows
       const { data: telemetry, error } = await supabase.rpc('sample_telemetry_data', {
         p_session_id: sessionId,
         p_metric: metric,
         p_sample_size: 2000
-      });
+      }, {
+        head: false,
+        count: null
+      }).range(0, 1999);
 
       if (error) throw error;
       
