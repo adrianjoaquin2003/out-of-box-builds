@@ -55,13 +55,55 @@ export function ConfigurableChart({
 
   const fetchData = async () => {
     try {
-      const { data: telemetry, error } = await supabase
+      // First, get the time range and count
+      const { count } = await supabase
         .from('telemetry_data')
-        .select('*')
-        .eq('session_id', sessionId)
-        .order('time', { ascending: true });
+        .select('*', { count: 'exact', head: true })
+        .eq('session_id', sessionId);
 
-      if (error) throw error;
+      const totalRows = count || 0;
+      const maxChartPoints = 2000; // Maximum points to display on chart
+      
+      let telemetry: any[] = [];
+      
+      if (totalRows <= maxChartPoints) {
+        // If data is small enough, fetch all
+        const { data, error } = await supabase
+          .from('telemetry_data')
+          .select('time, ' + metric)
+          .eq('session_id', sessionId)
+          .order('time', { ascending: true });
+        
+        if (error) throw error;
+        telemetry = data || [];
+      } else {
+        // Sample data evenly across the time range
+        const sampleRate = Math.ceil(totalRows / maxChartPoints);
+        
+        // Fetch data in chunks with sampling
+        const chunkSize = 1000;
+        let offset = 0;
+        
+        while (offset < totalRows) {
+          const { data, error } = await supabase
+            .from('telemetry_data')
+            .select('time, ' + metric)
+            .eq('session_id', sessionId)
+            .order('time', { ascending: true })
+            .range(offset, offset + chunkSize - 1);
+          
+          if (error) throw error;
+          
+          // Sample from this chunk
+          if (data) {
+            for (let i = 0; i < data.length; i += sampleRate) {
+              telemetry.push(data[i]);
+            }
+          }
+          
+          offset += chunkSize;
+        }
+      }
 
       if (telemetry && telemetry.length > 0) {
         // Filter out null values and prepare data
@@ -74,9 +116,15 @@ export function ConfigurableChart({
 
         setData(validData);
 
-        // Calculate statistics
-        if (validData.length > 0) {
-          const values = validData.map(d => d.value);
+        // Calculate statistics - fetch separately for accuracy
+        const { data: allData, error: statsError } = await supabase
+          .from('telemetry_data')
+          .select(metric)
+          .eq('session_id', sessionId)
+          .not(metric, 'is', null);
+
+        if (!statsError && allData && allData.length > 0) {
+          const values = allData.map((d: any) => d[metric]);
           setStats({
             min: Math.min(...values),
             max: Math.max(...values),
