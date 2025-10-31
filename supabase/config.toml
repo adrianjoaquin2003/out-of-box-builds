@@ -2,3 +2,6 @@ project_id = "ubmasfaniokqszfbwatj"
 
 [functions.process-telemetry]
 verify_jwt = true
+
+[functions.clear-telemetry]
+verify_jwt = false
