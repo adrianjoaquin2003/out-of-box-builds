@@ -172,6 +172,7 @@ export type Database = {
       }
       sessions: {
         Row: {
+          available_metrics: Json | null
           car_info: string | null
           created_at: string
           date: string | null
@@ -186,6 +187,7 @@ export type Database = {
           weather_conditions: string | null
         }
         Insert: {
+          available_metrics?: Json | null
           car_info?: string | null
           created_at?: string
           date?: string | null
@@ -200,6 +202,7 @@ export type Database = {
           weather_conditions?: string | null
         }
         Update: {
+          available_metrics?: Json | null
           car_info?: string | null
           created_at?: string
           date?: string | null

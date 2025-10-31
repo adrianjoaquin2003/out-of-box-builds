@@ -236,6 +236,77 @@ async function processData(supabase: any, fileId: string, sessionId: string) {
       throw new Error('No valid telemetry data found in file');
     }
 
+    // Detect available metrics by checking which fields have non-null data
+    const availableMetrics: Array<{ key: string; label: string; unit: string; category: string }> = [];
+    const metricsMap: Record<string, { label: string; unit: string; category: string }> = {
+      ground_speed: { label: 'Speed', unit: 'km/h', category: 'Performance' },
+      gps_speed: { label: 'GPS Speed', unit: 'km/h', category: 'Performance' },
+      drive_speed: { label: 'Drive Speed', unit: 'km/h', category: 'Performance' },
+      engine_speed: { label: 'Engine RPM', unit: 'RPM', category: 'Engine' },
+      throttle_position: { label: 'Throttle Position', unit: '%', category: 'Driver Input' },
+      throttle_pedal: { label: 'Throttle Pedal', unit: '%', category: 'Driver Input' },
+      g_force_lat: { label: 'Lateral G-Force', unit: 'G', category: 'Forces' },
+      g_force_long: { label: 'Longitudinal G-Force', unit: 'G', category: 'Forces' },
+      g_force_vert: { label: 'Vertical G-Force', unit: 'G', category: 'Forces' },
+      engine_oil_temperature: { label: 'Oil Temperature', unit: '°C', category: 'Engine' },
+      engine_oil_pressure: { label: 'Oil Pressure', unit: 'bar', category: 'Engine' },
+      coolant_temperature: { label: 'Coolant Temperature', unit: '°C', category: 'Engine' },
+      inlet_air_temperature: { label: 'Inlet Air Temp', unit: '°C', category: 'Engine' },
+      boost_pressure: { label: 'Boost Pressure', unit: 'bar', category: 'Engine' },
+      fuel_pressure_sensor: { label: 'Fuel Pressure', unit: 'bar', category: 'Fuel' },
+      fuel_temperature: { label: 'Fuel Temperature', unit: '°C', category: 'Fuel' },
+      fuel_used_m1: { label: 'Fuel Used', unit: 'L', category: 'Fuel' },
+      fuel_inj_primary_duty_cycle: { label: 'Fuel Inj Duty Cycle', unit: '%', category: 'Fuel' },
+      inlet_manifold_pressure: { label: 'Manifold Pressure', unit: 'bar', category: 'Engine' },
+      airbox_temperature: { label: 'Airbox Temperature', unit: '°C', category: 'Engine' },
+      gear: { label: 'Gear', unit: '', category: 'Transmission' },
+      gear_detect_value: { label: 'Gear Detect', unit: '', category: 'Transmission' },
+      bat_volts_ecu: { label: 'Battery ECU', unit: 'V', category: 'Electrical' },
+      bat_volts_dash: { label: 'Battery Dash', unit: 'V', category: 'Electrical' },
+      lap_number: { label: 'Lap Number', unit: '', category: 'Lap Data' },
+      lap_time: { label: 'Lap Time', unit: 's', category: 'Lap Data' },
+      lap_distance: { label: 'Lap Distance', unit: 'm', category: 'Lap Data' },
+      running_lap_time: { label: 'Running Lap Time', unit: 's', category: 'Lap Data' },
+      trip_distance: { label: 'Trip Distance', unit: 'm', category: 'GPS' },
+      gps_latitude: { label: 'GPS Latitude', unit: '°', category: 'GPS' },
+      gps_longitude: { label: 'GPS Longitude', unit: '°', category: 'GPS' },
+      gps_altitude: { label: 'GPS Altitude', unit: 'm', category: 'GPS' },
+      gps_heading: { label: 'GPS Heading', unit: '°', category: 'GPS' },
+    };
+
+    // Check first 100 rows to see which fields have data
+    const sampleSize = Math.min(100, telemetryData.length);
+    const fieldsWithData = new Set<string>();
+    
+    for (let i = 0; i < sampleSize; i++) {
+      const row = telemetryData[i];
+      Object.keys(row).forEach(key => {
+        if (key !== 'session_id' && key !== 'file_id' && row[key] !== null && row[key] !== undefined) {
+          fieldsWithData.add(key);
+        }
+      });
+    }
+
+    // Build available metrics list
+    fieldsWithData.forEach(field => {
+      if (metricsMap[field]) {
+        availableMetrics.push({
+          key: field,
+          ...metricsMap[field]
+        });
+      } else {
+        // For unknown fields, create a basic entry
+        availableMetrics.push({
+          key: field,
+          label: field.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+          unit: '',
+          category: 'Other'
+        });
+      }
+    });
+
+    console.log('Detected available metrics:', availableMetrics.map(m => m.key));
+
     // Insert in batches of 1000
     const batchSize = 1000;
     for (let i = 0; i < telemetryData.length; i += batchSize) {
@@ -250,6 +321,12 @@ async function processData(supabase: any, fileId: string, sessionId: string) {
       }
       console.log(`Inserted batch ${Math.floor(i / batchSize) + 1} of ${Math.ceil(telemetryData.length / batchSize)}`);
     }
+
+    // Update session with available metrics
+    await supabase
+      .from('sessions')
+      .update({ available_metrics: availableMetrics })
+      .eq('id', sessionId);
 
     await supabase
       .from('uploaded_files')

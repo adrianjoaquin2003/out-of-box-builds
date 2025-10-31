@@ -22,25 +22,15 @@ interface Session {
   name: string;
   track_name: string;
   date: string;
+  available_metrics?: Array<{ key: string; label: string; unit: string; category: string }>;
 }
 
-// Available metrics from telemetry data
-const AVAILABLE_METRICS = [
-  { key: 'ground_speed', label: 'Speed', unit: 'km/h', category: 'Performance' },
-  { key: 'engine_speed', label: 'Engine RPM', unit: 'RPM', category: 'Engine' },
-  { key: 'throttle_position', label: 'Throttle Position', unit: '%', category: 'Driver Input' },
-  { key: 'g_force_lat', label: 'Lateral G-Force', unit: 'G', category: 'Forces' },
-  { key: 'g_force_long', label: 'Longitudinal G-Force', unit: 'G', category: 'Forces' },
-  { key: 'g_force_vert', label: 'Vertical G-Force', unit: 'G', category: 'Forces' },
-  { key: 'engine_oil_temperature', label: 'Oil Temperature', unit: '°C', category: 'Engine' },
-  { key: 'engine_oil_pressure', label: 'Oil Pressure', unit: 'bar', category: 'Engine' },
-  { key: 'coolant_temperature', label: 'Coolant Temperature', unit: '°C', category: 'Engine' },
-  { key: 'inlet_air_temperature', label: 'Inlet Air Temp', unit: '°C', category: 'Engine' },
-  { key: 'boost_pressure', label: 'Boost Pressure', unit: 'bar', category: 'Engine' },
-  { key: 'fuel_pressure_sensor', label: 'Fuel Pressure', unit: 'bar', category: 'Fuel' },
-  { key: 'fuel_temperature', label: 'Fuel Temperature', unit: '°C', category: 'Fuel' },
-  { key: 'gear', label: 'Gear', unit: '', category: 'Transmission' },
-];
+interface Metric {
+  key: string;
+  label: string;
+  unit: string;
+  category: string;
+}
 
 export default function ReportBuilder() {
   const { sessionId, reportId } = useParams<{ sessionId: string; reportId?: string }>();
@@ -52,8 +42,9 @@ export default function ReportBuilder() {
   const [reportName, setReportName] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [availableMetrics, setAvailableMetrics] = useState<Metric[]>([]);
 
-  const categories = ['All', ...Array.from(new Set(AVAILABLE_METRICS.map(m => m.category)))];
+  const categories = ['All', ...Array.from(new Set(availableMetrics.map(m => m.category)))];
 
   useEffect(() => {
     if (sessionId) {
@@ -73,7 +64,20 @@ export default function ReportBuilder() {
         .single();
 
       if (error) throw error;
-      setSession(data);
+      
+      // Parse available_metrics as an array of Metric objects
+      const metrics = Array.isArray(data.available_metrics) 
+        ? (data.available_metrics as unknown as Metric[])
+        : [];
+      
+      setSession({
+        id: data.id,
+        name: data.name,
+        track_name: data.track_name || '',
+        date: data.date || '',
+        available_metrics: metrics
+      });
+      setAvailableMetrics(metrics);
     } catch (error) {
       console.error('Error fetching session:', error);
       toast({
@@ -179,7 +183,7 @@ export default function ReportBuilder() {
     setCharts([...charts, newChart]);
     toast({
       title: 'Chart Added',
-      description: `${AVAILABLE_METRICS.find(m => m.key === metric)?.label} chart added to report`,
+      description: `${availableMetrics.find(m => m.key === metric)?.label} chart added to report`,
     });
   };
 
@@ -192,8 +196,8 @@ export default function ReportBuilder() {
   };
 
   const filteredMetrics = selectedCategory === 'All'
-    ? AVAILABLE_METRICS
-    : AVAILABLE_METRICS.filter(m => m.category === selectedCategory);
+    ? availableMetrics
+    : availableMetrics.filter(m => m.category === selectedCategory);
 
   if (loading) {
     return (
@@ -283,7 +287,20 @@ export default function ReportBuilder() {
         {/* Main Canvas - Report Area */}
         <main className="flex-1 overflow-y-auto">
           <div className="container mx-auto px-6 py-6">
-            {charts.length === 0 ? (
+            {availableMetrics.length === 0 ? (
+              <div className="flex items-center justify-center h-[calc(100vh-200px)]">
+                <Card className="max-w-md text-center">
+                  <CardHeader>
+                    <CardTitle>No Telemetry Data Available</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-muted-foreground mb-4">
+                      This session doesn't have any telemetry data yet. Upload a CSV file to get started.
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+            ) : charts.length === 0 ? (
               <div className="flex items-center justify-center h-[calc(100vh-200px)]">
                 <Card className="max-w-md text-center">
                   <CardHeader>
@@ -300,7 +317,7 @@ export default function ReportBuilder() {
             ) : (
               <div className="space-y-6">
                 {charts.map(chart => {
-                  const metric = AVAILABLE_METRICS.find(m => m.key === chart.metric);
+                  const metric = availableMetrics.find(m => m.key === chart.metric);
                   return (
                     <ConfigurableChart
                       key={chart.id}
