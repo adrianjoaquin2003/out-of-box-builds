@@ -127,11 +127,11 @@ export default function TeamOnboarding() {
 
     setLoading(true);
     try {
-      // Find the team by name
+      // Find the team by name (case-insensitive)
       const { data: team, error: teamError } = await supabase
         .from('teams')
         .select('id, name')
-        .eq('name', joinTeamName)
+        .ilike('name', joinTeamName)
         .maybeSingle();
 
       if (teamError) throw teamError;
