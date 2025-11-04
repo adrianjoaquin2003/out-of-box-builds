@@ -161,10 +161,14 @@ self.onmessage = async (e: MessageEvent<ProcessMessage>) => {
         const header = headers[j];
         const dbColumn = columnMap[header];
         const unit = units[j] || '';
+        const value = values[j];
         
-        if (dbColumn && values[j] !== undefined && values[j] !== '') {
-          const value = values[j];
-          
+        // Debug first row
+        if (processedRows === 0 && j < 10) {
+          console.log(`Column ${j}: header="${header}", dbColumn="${dbColumn}", value="${value}", type=${typeof value}`);
+        }
+        
+        if (dbColumn && value !== undefined && value !== null && value !== '') {
           // Handle string fields
           if (dbColumn === 'gps_time' || dbColumn === 'gps_date') {
             row[dbColumn] = value;
@@ -182,6 +186,13 @@ self.onmessage = async (e: MessageEvent<ProcessMessage>) => {
                 }
               }
               row[dbColumn] = convertedValue;
+              
+              // Debug first few successful parses
+              if (processedRows === 0) {
+                console.log(`Parsed ${dbColumn}: ${value} -> ${convertedValue}`);
+              }
+            } else if (processedRows === 0) {
+              console.log(`Failed to parse ${dbColumn}: "${value}" (type: ${typeof value})`);
             }
           }
         }
