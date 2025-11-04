@@ -453,72 +453,26 @@ const Dashboard = () => {
 
         toast({
           title: "Processing Started",
-          description: "File uploaded. Processing telemetry data...",
+          description: "File uploaded. Processing telemetry data in the cloud...",
         });
 
-        // Step 4: Process file using web worker
-        // Add timestamp to bust cache
-        const workerUrl = new URL('../workers/telemetryProcessor.ts', import.meta.url);
-        workerUrl.searchParams.set('v', Date.now().toString());
-        const worker = new Worker(workerUrl, {
-          type: 'module'
+        // Step 4: Trigger edge function to process file (runs server-side, much faster)
+        const { error: functionError } = await supabase.functions.invoke('process-telemetry', {
+          body: {
+            fileId: fileRecord.id,
+            sessionId: sessionId
+          }
         });
 
-        worker.onmessage = (e) => {
-          const { type, progress, processed, total, message, insertedRows, error } = e.data;
-
-          if (type === 'debug') {
-            console.log('[Worker Debug]:', message);
-            return;
-          }
-
-          if (type === 'status') {
-            toast({
-              title: "Processing",
-              description: message,
-            });
-          } else if (type === 'progress') {
-            // Progress updates will be shown in the UI automatically via polling
-            fetchFileStatuses();
-          } else if (type === 'complete') {
-            worker.terminate();
-            toast({
-              title: "Processing Complete",
-              description: message,
-            });
-            fetchSessions();
-            fetchFileStatuses();
-          } else if (type === 'error') {
-            worker.terminate();
-            toast({
-              title: "Processing Failed",
-              description: error,
-              variant: "destructive",
-            });
-            fetchFileStatuses();
-          }
-        };
-
-        worker.onerror = (error) => {
-          console.error('Worker error:', error);
-          worker.terminate();
+        if (functionError) {
+          console.error('Error triggering processing:', functionError);
           toast({
             title: "Processing Failed",
-            description: "An error occurred while processing the file.",
+            description: "Failed to start processing. Please try again.",
             variant: "destructive",
           });
-        };
-
-        // Get user's access token
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        worker.postMessage({
-          type: 'process',
-          fileId: fileRecord.id,
-          sessionId: sessionId,
-          filePath: filePath,
-          accessToken: session?.access_token || ''
-        });
+          throw functionError;
+        }
 
         // Refresh file statuses to show processing
         fetchFileStatuses();
