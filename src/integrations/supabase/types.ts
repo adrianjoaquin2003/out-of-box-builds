@@ -288,24 +288,76 @@ export type Database = {
       }
       telemetry_data: {
         Row: {
+          "5v_aux_supply": number | null
+          acceleration_x_axis: number | null
+          acceleration_y_axis: number | null
+          acceleration_z_axis: number | null
           airbox_temperature: number | null
+          angular_rate_x_axis: number | null
+          angular_rate_y_axis: number | null
+          angular_rate_z_axis: number | null
           bat_volts_dash: number | null
           bat_volts_ecu: number | null
           boost_pressure: number | null
+          brake_state: number | null
+          brake_temp_fl: number | null
+          brake_temp_fr: number | null
+          brake_temp_rl: number | null
+          brake_temp_rr: number | null
+          comms_can_1_diag: number | null
+          comms_can_15_diag: number | null
+          comms_can_2_diag: number | null
+          comms_can_20_diag: number | null
+          comms_can_3_diag: number | null
           comms_rs232_2_diag: number | null
+          comms_rs232_diag: number | null
+          coolant_pressure: number | null
           coolant_temperature: number | null
+          coolant_temperature_warning: number | null
           cpu_usage: number | null
+          crankcase_pressure_warning: number | null
           created_at: string
           dash_temp: number | null
           device_up_time: number | null
           drive_speed: number | null
+          driver_switch_6: number | null
+          engine_crankcase_pressure: number | null
+          engine_efficiency: number | null
+          engine_load: number | null
+          engine_load_average: number | null
           engine_oil_pressure: number | null
+          engine_oil_temp_warning: number | null
           engine_oil_temperature: number | null
+          engine_overrun_state: number | null
+          engine_run_hours_total: number | null
+          engine_run_switch: number | null
+          engine_run_time: number | null
           engine_speed: number | null
+          engine_speed_limit: number | null
+          engine_speed_limit_state: number | null
+          engine_speed_reference_state: number | null
+          engine_speed_warning: number | null
+          engine_state: number | null
+          exhaust_lambda: number | null
+          exhaust_lambda_bank_1: number | null
+          exhaust_temperature: number | null
           file_id: string
           fuel_inj_primary_duty_cycle: number | null
+          fuel_inj_primary_press: number | null
+          fuel_inj_sec_contribution: number | null
+          fuel_inj_secondary_duty_cycle: number | null
+          fuel_inj_secondary_press: number | null
+          fuel_mixture_aim: number | null
+          fuel_output_cut_average: number | null
+          fuel_output_cut_count: number | null
+          fuel_pres_direct: number | null
+          fuel_pres_direct_aim: number | null
           fuel_pressure_sensor: number | null
+          fuel_pressure_warning: number | null
+          fuel_pump_state: number | null
           fuel_temperature: number | null
+          fuel_timing_primary: number | null
+          fuel_timing_secondary: number | null
           fuel_used_m1: number | null
           g_force_lat: number | null
           g_force_long: number | null
@@ -314,49 +366,357 @@ export type Database = {
           gear_detect_value: number | null
           gps_altitude: number | null
           gps_date: string | null
+          gps_dop: number | null
+          gps_hdop: number | null
           gps_heading: number | null
           gps_latitude: number | null
           gps_longitude: number | null
+          gps_quality: number | null
           gps_sats_used: number | null
           gps_speed: number | null
           gps_time: string | null
+          gps_valid: number | null
+          gps_vdop: number | null
           ground_speed: number | null
           id: string
+          ignition_cut_state: number | null
+          ignition_cyl_1_knock_level: number | null
+          ignition_cyl_1_trim_knock: number | null
           ignition_timing: number | null
+          ignition_timing_state: number | null
+          imu_temp: number | null
           inlet_air_temperature: number | null
+          inlet_cam_bank1_duty_cycle: number | null
+          inlet_cam_bank2_duty_cycle: number | null
+          inlet_camshaft_aim: number | null
+          inlet_camshaft_bank1_position: number | null
+          inlet_camshaft_bank2_position: number | null
           inlet_manifold_pressure: number | null
+          inlet_mass_flow: number | null
+          keypad_button_1: number | null
+          keypad_button_2: number | null
+          keypad_button_3: number | null
+          keypad_button_4: number | null
+          keypad_button_5: number | null
+          keypad_button_6: number | null
+          keypad_button_7: number | null
+          keypad_button_8: number | null
+          knock_state: number | null
+          knock_threshold: number | null
+          knock_warning: number | null
           lap_distance: number | null
+          lap_gain_loss_final: number | null
           lap_gain_loss_running: number | null
           lap_number: number | null
           lap_time: number | null
           lap_time_predicted: number | null
+          lateral_acceleration: number | null
+          launch_diagnostic: number | null
+          launch_state: number | null
+          launch_switch: number | null
+          lf_rotor_temp_01_2: number | null
+          lf_rotor_temp_02_2: number | null
+          lf_rotor_temp_03_2: number | null
+          lf_rotor_temp_04_2: number | null
+          lf_rotor_temp_05_2: number | null
+          lf_rotor_temp_06_2: number | null
+          lf_rotor_temp_07_2: number | null
+          lf_rotor_temp_08_2: number | null
+          lf_rotor_temp_09_2: number | null
+          lf_rotor_temp_10_2: number | null
+          lf_rotor_temp_11_2: number | null
+          lf_rotor_temp_12_2: number | null
+          lf_rotor_temp_13_2: number | null
+          lf_rotor_temp_14_2: number | null
+          lf_rotor_temp_15_2: number | null
+          lf_rotor_temp_16_2: number | null
+          lf_sensor_temp_2: number | null
+          lf_tire_temp_01: number | null
+          lf_tire_temp_02: number | null
+          lf_tire_temp_03: number | null
+          lf_tire_temp_04: number | null
+          lf_tire_temp_05: number | null
+          lf_tire_temp_06: number | null
+          lf_tire_temp_07: number | null
+          lf_tire_temp_08: number | null
+          lf_tire_temp_09: number | null
+          lf_tire_temp_10: number | null
+          lf_tire_temp_11: number | null
+          lf_tire_temp_12: number | null
+          lf_tire_temp_13: number | null
+          lf_tire_temp_14: number | null
+          lf_tire_temp_15: number | null
+          lf_tire_temp_16: number | null
+          log_data_available: number | null
+          log_memory_busy: number | null
+          log_time_remaining: number | null
+          log_unloading: number | null
+          logging_running: number | null
+          logging_system_1_used: number | null
+          longitudinal_acceleration: number | null
+          lr_rotor_temp_01_2: number | null
+          lr_rotor_temp_02_2: number | null
+          lr_rotor_temp_03_2: number | null
+          lr_rotor_temp_04_2: number | null
+          lr_rotor_temp_05_2: number | null
+          lr_rotor_temp_06_2: number | null
+          lr_rotor_temp_07_2: number | null
+          lr_rotor_temp_08_2: number | null
+          lr_rotor_temp_09_2: number | null
+          lr_rotor_temp_10_2: number | null
+          lr_rotor_temp_11_2: number | null
+          lr_rotor_temp_12_2: number | null
+          lr_rotor_temp_13_2: number | null
+          lr_rotor_temp_14_2: number | null
+          lr_rotor_temp_15_2: number | null
+          lr_rotor_temp_16_2: number | null
+          lr_sensor_temp_2: number | null
+          lr_tire_temp_01: number | null
+          lr_tire_temp_02: number | null
+          lr_tire_temp_03: number | null
+          lr_tire_temp_04: number | null
+          lr_tire_temp_05: number | null
+          lr_tire_temp_06: number | null
+          lr_tire_temp_07: number | null
+          lr_tire_temp_08: number | null
+          lr_tire_temp_09: number | null
+          lr_tire_temp_10: number | null
+          lr_tire_temp_11: number | null
+          lr_tire_temp_12: number | null
+          lr_tire_temp_13: number | null
+          lr_tire_temp_14: number | null
+          lr_tire_temp_15: number | null
+          lr_tire_temp_16: number | null
+          max_straight_speed: number | null
+          min_corner_speed: number | null
+          odometer: number | null
+          pdm_fault_flag: number | null
+          pdm_input_1_state: number | null
+          pdm_input_1_voltage: number | null
+          pdm_input_11_state: number | null
+          pdm_input_11_voltage: number | null
+          pdm_input_12_state: number | null
+          pdm_input_12_voltage: number | null
+          pdm_input_5_state: number | null
+          pdm_input_5_voltage: number | null
+          pdm_internal_9_5v: number | null
+          pdm_output_1_current: number | null
+          pdm_output_1_load: number | null
+          pdm_output_1_status: number | null
+          pdm_output_1_voltage: number | null
+          pdm_output_10_current: number | null
+          pdm_output_10_load: number | null
+          pdm_output_10_status: number | null
+          pdm_output_10_voltage: number | null
+          pdm_output_11_current: number | null
+          pdm_output_11_load: number | null
+          pdm_output_11_status: number | null
+          pdm_output_11_voltage: number | null
+          pdm_output_12_current: number | null
+          pdm_output_12_load: number | null
+          pdm_output_12_status: number | null
+          pdm_output_12_voltage: number | null
+          pdm_output_13_current: number | null
+          pdm_output_13_load: number | null
+          pdm_output_13_status: number | null
+          pdm_output_13_voltage: number | null
+          pdm_output_14_current: number | null
+          pdm_output_14_load: number | null
+          pdm_output_14_status: number | null
+          pdm_output_14_voltage: number | null
+          pdm_output_15_current: number | null
+          pdm_output_15_load: number | null
+          pdm_output_15_status: number | null
+          pdm_output_15_voltage: number | null
+          pdm_output_2_current: number | null
+          pdm_output_2_load: number | null
+          pdm_output_2_status: number | null
+          pdm_output_2_voltage: number | null
+          pdm_output_3_current: number | null
+          pdm_output_3_load: number | null
+          pdm_output_3_status: number | null
+          pdm_output_3_voltage: number | null
+          pdm_output_4_current: number | null
+          pdm_output_4_load: number | null
+          pdm_output_4_status: number | null
+          pdm_output_4_voltage: number | null
+          pdm_output_9_current: number | null
+          pdm_output_9_load: number | null
+          pdm_output_9_status: number | null
+          pdm_output_9_voltage: number | null
+          pdm_reset_source: number | null
+          pdm_temp: number | null
+          pdm_total_current: number | null
+          pitch_rotational_rate: number | null
+          race_time_reset_switch: number | null
           reference_lap_time: number | null
+          reference_lap_time_reset: number | null
+          rf_rotor_temp_01_2: number | null
+          rf_rotor_temp_02_2: number | null
+          rf_rotor_temp_03_2: number | null
+          rf_rotor_temp_04_2: number | null
+          rf_rotor_temp_05_2: number | null
+          rf_rotor_temp_06_2: number | null
+          rf_rotor_temp_07_2: number | null
+          rf_rotor_temp_08_2: number | null
+          rf_rotor_temp_09_2: number | null
+          rf_rotor_temp_10_2: number | null
+          rf_rotor_temp_11_2: number | null
+          rf_rotor_temp_12_2: number | null
+          rf_rotor_temp_13_2: number | null
+          rf_rotor_temp_14_2: number | null
+          rf_rotor_temp_15_2: number | null
+          rf_rotor_temp_16_2: number | null
+          rf_sensor_temp_2: number | null
+          rf_tire_temp_01: number | null
+          rf_tire_temp_02: number | null
+          rf_tire_temp_03: number | null
+          rf_tire_temp_04: number | null
+          rf_tire_temp_05: number | null
+          rf_tire_temp_06: number | null
+          rf_tire_temp_07: number | null
+          rf_tire_temp_08: number | null
+          rf_tire_temp_09: number | null
+          rf_tire_temp_10: number | null
+          rf_tire_temp_11: number | null
+          rf_tire_temp_12: number | null
+          rf_tire_temp_13: number | null
+          rf_tire_temp_14: number | null
+          rf_tire_temp_15: number | null
+          rf_tire_temp_16: number | null
+          roll_rotational_rate: number | null
+          rr_rotor_temp_01_2: number | null
+          rr_rotor_temp_02_2: number | null
+          rr_rotor_temp_03_2: number | null
+          rr_rotor_temp_04_2: number | null
+          rr_rotor_temp_05_2: number | null
+          rr_rotor_temp_06_2: number | null
+          rr_rotor_temp_07_2: number | null
+          rr_rotor_temp_08_2: number | null
+          rr_rotor_temp_09_2: number | null
+          rr_rotor_temp_10_2: number | null
+          rr_rotor_temp_11_2: number | null
+          rr_rotor_temp_12_2: number | null
+          rr_rotor_temp_13_2: number | null
+          rr_rotor_temp_14_2: number | null
+          rr_rotor_temp_15_2: number | null
+          rr_rotor_temp_16_2: number | null
+          rr_sensor_temp_2: number | null
+          rr_tire_temp_01: number | null
+          rr_tire_temp_02: number | null
+          rr_tire_temp_03: number | null
+          rr_tire_temp_04: number | null
+          rr_tire_temp_05: number | null
+          rr_tire_temp_06: number | null
+          rr_tire_temp_07: number | null
+          rr_tire_temp_08: number | null
+          rr_tire_temp_09: number | null
+          rr_tire_temp_10: number | null
+          rr_tire_temp_11: number | null
+          rr_tire_temp_12: number | null
+          rr_tire_temp_13: number | null
+          rr_tire_temp_14: number | null
+          rr_tire_temp_15: number | null
+          rr_tire_temp_16: number | null
+          rtc_utc_time: number | null
           running_lap_time: number | null
           session_id: string
+          session_reset: number | null
+          session_time: number | null
+          shock_displacment_fl: number | null
+          shock_displacment_fr: number | null
+          shock_displacment_rl: number | null
+          shock_displacment_rr: number | null
+          throttle_aim_state: number | null
           throttle_pedal: number | null
           throttle_position: number | null
           time: number | null
           trip_distance: number | null
+          vehicle_accel_lateral: number | null
+          vehicle_accel_long: number | null
+          vehicle_accel_vert: number | null
+          vehicle_speed: number | null
+          vehicle_yaw_rate: number | null
+          vertical_acceleration: number | null
+          warning_light: number | null
+          warning_source: number | null
+          wheel_speed_fl: number | null
+          wheel_speed_fr: number | null
+          wheel_speed_rl: number | null
+          wheel_speed_rr: number | null
+          yaw_rotational_rate: number | null
         }
         Insert: {
+          "5v_aux_supply"?: number | null
+          acceleration_x_axis?: number | null
+          acceleration_y_axis?: number | null
+          acceleration_z_axis?: number | null
           airbox_temperature?: number | null
+          angular_rate_x_axis?: number | null
+          angular_rate_y_axis?: number | null
+          angular_rate_z_axis?: number | null
           bat_volts_dash?: number | null
           bat_volts_ecu?: number | null
           boost_pressure?: number | null
+          brake_state?: number | null
+          brake_temp_fl?: number | null
+          brake_temp_fr?: number | null
+          brake_temp_rl?: number | null
+          brake_temp_rr?: number | null
+          comms_can_1_diag?: number | null
+          comms_can_15_diag?: number | null
+          comms_can_2_diag?: number | null
+          comms_can_20_diag?: number | null
+          comms_can_3_diag?: number | null
           comms_rs232_2_diag?: number | null
+          comms_rs232_diag?: number | null
+          coolant_pressure?: number | null
           coolant_temperature?: number | null
+          coolant_temperature_warning?: number | null
           cpu_usage?: number | null
+          crankcase_pressure_warning?: number | null
           created_at?: string
           dash_temp?: number | null
           device_up_time?: number | null
           drive_speed?: number | null
+          driver_switch_6?: number | null
+          engine_crankcase_pressure?: number | null
+          engine_efficiency?: number | null
+          engine_load?: number | null
+          engine_load_average?: number | null
           engine_oil_pressure?: number | null
+          engine_oil_temp_warning?: number | null
           engine_oil_temperature?: number | null
+          engine_overrun_state?: number | null
+          engine_run_hours_total?: number | null
+          engine_run_switch?: number | null
+          engine_run_time?: number | null
           engine_speed?: number | null
+          engine_speed_limit?: number | null
+          engine_speed_limit_state?: number | null
+          engine_speed_reference_state?: number | null
+          engine_speed_warning?: number | null
+          engine_state?: number | null
+          exhaust_lambda?: number | null
+          exhaust_lambda_bank_1?: number | null
+          exhaust_temperature?: number | null
           file_id: string
           fuel_inj_primary_duty_cycle?: number | null
+          fuel_inj_primary_press?: number | null
+          fuel_inj_sec_contribution?: number | null
+          fuel_inj_secondary_duty_cycle?: number | null
+          fuel_inj_secondary_press?: number | null
+          fuel_mixture_aim?: number | null
+          fuel_output_cut_average?: number | null
+          fuel_output_cut_count?: number | null
+          fuel_pres_direct?: number | null
+          fuel_pres_direct_aim?: number | null
           fuel_pressure_sensor?: number | null
+          fuel_pressure_warning?: number | null
+          fuel_pump_state?: number | null
           fuel_temperature?: number | null
+          fuel_timing_primary?: number | null
+          fuel_timing_secondary?: number | null
           fuel_used_m1?: number | null
           g_force_lat?: number | null
           g_force_long?: number | null
@@ -365,49 +725,357 @@ export type Database = {
           gear_detect_value?: number | null
           gps_altitude?: number | null
           gps_date?: string | null
+          gps_dop?: number | null
+          gps_hdop?: number | null
           gps_heading?: number | null
           gps_latitude?: number | null
           gps_longitude?: number | null
+          gps_quality?: number | null
           gps_sats_used?: number | null
           gps_speed?: number | null
           gps_time?: string | null
+          gps_valid?: number | null
+          gps_vdop?: number | null
           ground_speed?: number | null
           id?: string
+          ignition_cut_state?: number | null
+          ignition_cyl_1_knock_level?: number | null
+          ignition_cyl_1_trim_knock?: number | null
           ignition_timing?: number | null
+          ignition_timing_state?: number | null
+          imu_temp?: number | null
           inlet_air_temperature?: number | null
+          inlet_cam_bank1_duty_cycle?: number | null
+          inlet_cam_bank2_duty_cycle?: number | null
+          inlet_camshaft_aim?: number | null
+          inlet_camshaft_bank1_position?: number | null
+          inlet_camshaft_bank2_position?: number | null
           inlet_manifold_pressure?: number | null
+          inlet_mass_flow?: number | null
+          keypad_button_1?: number | null
+          keypad_button_2?: number | null
+          keypad_button_3?: number | null
+          keypad_button_4?: number | null
+          keypad_button_5?: number | null
+          keypad_button_6?: number | null
+          keypad_button_7?: number | null
+          keypad_button_8?: number | null
+          knock_state?: number | null
+          knock_threshold?: number | null
+          knock_warning?: number | null
           lap_distance?: number | null
+          lap_gain_loss_final?: number | null
           lap_gain_loss_running?: number | null
           lap_number?: number | null
           lap_time?: number | null
           lap_time_predicted?: number | null
+          lateral_acceleration?: number | null
+          launch_diagnostic?: number | null
+          launch_state?: number | null
+          launch_switch?: number | null
+          lf_rotor_temp_01_2?: number | null
+          lf_rotor_temp_02_2?: number | null
+          lf_rotor_temp_03_2?: number | null
+          lf_rotor_temp_04_2?: number | null
+          lf_rotor_temp_05_2?: number | null
+          lf_rotor_temp_06_2?: number | null
+          lf_rotor_temp_07_2?: number | null
+          lf_rotor_temp_08_2?: number | null
+          lf_rotor_temp_09_2?: number | null
+          lf_rotor_temp_10_2?: number | null
+          lf_rotor_temp_11_2?: number | null
+          lf_rotor_temp_12_2?: number | null
+          lf_rotor_temp_13_2?: number | null
+          lf_rotor_temp_14_2?: number | null
+          lf_rotor_temp_15_2?: number | null
+          lf_rotor_temp_16_2?: number | null
+          lf_sensor_temp_2?: number | null
+          lf_tire_temp_01?: number | null
+          lf_tire_temp_02?: number | null
+          lf_tire_temp_03?: number | null
+          lf_tire_temp_04?: number | null
+          lf_tire_temp_05?: number | null
+          lf_tire_temp_06?: number | null
+          lf_tire_temp_07?: number | null
+          lf_tire_temp_08?: number | null
+          lf_tire_temp_09?: number | null
+          lf_tire_temp_10?: number | null
+          lf_tire_temp_11?: number | null
+          lf_tire_temp_12?: number | null
+          lf_tire_temp_13?: number | null
+          lf_tire_temp_14?: number | null
+          lf_tire_temp_15?: number | null
+          lf_tire_temp_16?: number | null
+          log_data_available?: number | null
+          log_memory_busy?: number | null
+          log_time_remaining?: number | null
+          log_unloading?: number | null
+          logging_running?: number | null
+          logging_system_1_used?: number | null
+          longitudinal_acceleration?: number | null
+          lr_rotor_temp_01_2?: number | null
+          lr_rotor_temp_02_2?: number | null
+          lr_rotor_temp_03_2?: number | null
+          lr_rotor_temp_04_2?: number | null
+          lr_rotor_temp_05_2?: number | null
+          lr_rotor_temp_06_2?: number | null
+          lr_rotor_temp_07_2?: number | null
+          lr_rotor_temp_08_2?: number | null
+          lr_rotor_temp_09_2?: number | null
+          lr_rotor_temp_10_2?: number | null
+          lr_rotor_temp_11_2?: number | null
+          lr_rotor_temp_12_2?: number | null
+          lr_rotor_temp_13_2?: number | null
+          lr_rotor_temp_14_2?: number | null
+          lr_rotor_temp_15_2?: number | null
+          lr_rotor_temp_16_2?: number | null
+          lr_sensor_temp_2?: number | null
+          lr_tire_temp_01?: number | null
+          lr_tire_temp_02?: number | null
+          lr_tire_temp_03?: number | null
+          lr_tire_temp_04?: number | null
+          lr_tire_temp_05?: number | null
+          lr_tire_temp_06?: number | null
+          lr_tire_temp_07?: number | null
+          lr_tire_temp_08?: number | null
+          lr_tire_temp_09?: number | null
+          lr_tire_temp_10?: number | null
+          lr_tire_temp_11?: number | null
+          lr_tire_temp_12?: number | null
+          lr_tire_temp_13?: number | null
+          lr_tire_temp_14?: number | null
+          lr_tire_temp_15?: number | null
+          lr_tire_temp_16?: number | null
+          max_straight_speed?: number | null
+          min_corner_speed?: number | null
+          odometer?: number | null
+          pdm_fault_flag?: number | null
+          pdm_input_1_state?: number | null
+          pdm_input_1_voltage?: number | null
+          pdm_input_11_state?: number | null
+          pdm_input_11_voltage?: number | null
+          pdm_input_12_state?: number | null
+          pdm_input_12_voltage?: number | null
+          pdm_input_5_state?: number | null
+          pdm_input_5_voltage?: number | null
+          pdm_internal_9_5v?: number | null
+          pdm_output_1_current?: number | null
+          pdm_output_1_load?: number | null
+          pdm_output_1_status?: number | null
+          pdm_output_1_voltage?: number | null
+          pdm_output_10_current?: number | null
+          pdm_output_10_load?: number | null
+          pdm_output_10_status?: number | null
+          pdm_output_10_voltage?: number | null
+          pdm_output_11_current?: number | null
+          pdm_output_11_load?: number | null
+          pdm_output_11_status?: number | null
+          pdm_output_11_voltage?: number | null
+          pdm_output_12_current?: number | null
+          pdm_output_12_load?: number | null
+          pdm_output_12_status?: number | null
+          pdm_output_12_voltage?: number | null
+          pdm_output_13_current?: number | null
+          pdm_output_13_load?: number | null
+          pdm_output_13_status?: number | null
+          pdm_output_13_voltage?: number | null
+          pdm_output_14_current?: number | null
+          pdm_output_14_load?: number | null
+          pdm_output_14_status?: number | null
+          pdm_output_14_voltage?: number | null
+          pdm_output_15_current?: number | null
+          pdm_output_15_load?: number | null
+          pdm_output_15_status?: number | null
+          pdm_output_15_voltage?: number | null
+          pdm_output_2_current?: number | null
+          pdm_output_2_load?: number | null
+          pdm_output_2_status?: number | null
+          pdm_output_2_voltage?: number | null
+          pdm_output_3_current?: number | null
+          pdm_output_3_load?: number | null
+          pdm_output_3_status?: number | null
+          pdm_output_3_voltage?: number | null
+          pdm_output_4_current?: number | null
+          pdm_output_4_load?: number | null
+          pdm_output_4_status?: number | null
+          pdm_output_4_voltage?: number | null
+          pdm_output_9_current?: number | null
+          pdm_output_9_load?: number | null
+          pdm_output_9_status?: number | null
+          pdm_output_9_voltage?: number | null
+          pdm_reset_source?: number | null
+          pdm_temp?: number | null
+          pdm_total_current?: number | null
+          pitch_rotational_rate?: number | null
+          race_time_reset_switch?: number | null
           reference_lap_time?: number | null
+          reference_lap_time_reset?: number | null
+          rf_rotor_temp_01_2?: number | null
+          rf_rotor_temp_02_2?: number | null
+          rf_rotor_temp_03_2?: number | null
+          rf_rotor_temp_04_2?: number | null
+          rf_rotor_temp_05_2?: number | null
+          rf_rotor_temp_06_2?: number | null
+          rf_rotor_temp_07_2?: number | null
+          rf_rotor_temp_08_2?: number | null
+          rf_rotor_temp_09_2?: number | null
+          rf_rotor_temp_10_2?: number | null
+          rf_rotor_temp_11_2?: number | null
+          rf_rotor_temp_12_2?: number | null
+          rf_rotor_temp_13_2?: number | null
+          rf_rotor_temp_14_2?: number | null
+          rf_rotor_temp_15_2?: number | null
+          rf_rotor_temp_16_2?: number | null
+          rf_sensor_temp_2?: number | null
+          rf_tire_temp_01?: number | null
+          rf_tire_temp_02?: number | null
+          rf_tire_temp_03?: number | null
+          rf_tire_temp_04?: number | null
+          rf_tire_temp_05?: number | null
+          rf_tire_temp_06?: number | null
+          rf_tire_temp_07?: number | null
+          rf_tire_temp_08?: number | null
+          rf_tire_temp_09?: number | null
+          rf_tire_temp_10?: number | null
+          rf_tire_temp_11?: number | null
+          rf_tire_temp_12?: number | null
+          rf_tire_temp_13?: number | null
+          rf_tire_temp_14?: number | null
+          rf_tire_temp_15?: number | null
+          rf_tire_temp_16?: number | null
+          roll_rotational_rate?: number | null
+          rr_rotor_temp_01_2?: number | null
+          rr_rotor_temp_02_2?: number | null
+          rr_rotor_temp_03_2?: number | null
+          rr_rotor_temp_04_2?: number | null
+          rr_rotor_temp_05_2?: number | null
+          rr_rotor_temp_06_2?: number | null
+          rr_rotor_temp_07_2?: number | null
+          rr_rotor_temp_08_2?: number | null
+          rr_rotor_temp_09_2?: number | null
+          rr_rotor_temp_10_2?: number | null
+          rr_rotor_temp_11_2?: number | null
+          rr_rotor_temp_12_2?: number | null
+          rr_rotor_temp_13_2?: number | null
+          rr_rotor_temp_14_2?: number | null
+          rr_rotor_temp_15_2?: number | null
+          rr_rotor_temp_16_2?: number | null
+          rr_sensor_temp_2?: number | null
+          rr_tire_temp_01?: number | null
+          rr_tire_temp_02?: number | null
+          rr_tire_temp_03?: number | null
+          rr_tire_temp_04?: number | null
+          rr_tire_temp_05?: number | null
+          rr_tire_temp_06?: number | null
+          rr_tire_temp_07?: number | null
+          rr_tire_temp_08?: number | null
+          rr_tire_temp_09?: number | null
+          rr_tire_temp_10?: number | null
+          rr_tire_temp_11?: number | null
+          rr_tire_temp_12?: number | null
+          rr_tire_temp_13?: number | null
+          rr_tire_temp_14?: number | null
+          rr_tire_temp_15?: number | null
+          rr_tire_temp_16?: number | null
+          rtc_utc_time?: number | null
           running_lap_time?: number | null
           session_id: string
+          session_reset?: number | null
+          session_time?: number | null
+          shock_displacment_fl?: number | null
+          shock_displacment_fr?: number | null
+          shock_displacment_rl?: number | null
+          shock_displacment_rr?: number | null
+          throttle_aim_state?: number | null
           throttle_pedal?: number | null
           throttle_position?: number | null
           time?: number | null
           trip_distance?: number | null
+          vehicle_accel_lateral?: number | null
+          vehicle_accel_long?: number | null
+          vehicle_accel_vert?: number | null
+          vehicle_speed?: number | null
+          vehicle_yaw_rate?: number | null
+          vertical_acceleration?: number | null
+          warning_light?: number | null
+          warning_source?: number | null
+          wheel_speed_fl?: number | null
+          wheel_speed_fr?: number | null
+          wheel_speed_rl?: number | null
+          wheel_speed_rr?: number | null
+          yaw_rotational_rate?: number | null
         }
         Update: {
+          "5v_aux_supply"?: number | null
+          acceleration_x_axis?: number | null
+          acceleration_y_axis?: number | null
+          acceleration_z_axis?: number | null
           airbox_temperature?: number | null
+          angular_rate_x_axis?: number | null
+          angular_rate_y_axis?: number | null
+          angular_rate_z_axis?: number | null
           bat_volts_dash?: number | null
           bat_volts_ecu?: number | null
           boost_pressure?: number | null
+          brake_state?: number | null
+          brake_temp_fl?: number | null
+          brake_temp_fr?: number | null
+          brake_temp_rl?: number | null
+          brake_temp_rr?: number | null
+          comms_can_1_diag?: number | null
+          comms_can_15_diag?: number | null
+          comms_can_2_diag?: number | null
+          comms_can_20_diag?: number | null
+          comms_can_3_diag?: number | null
           comms_rs232_2_diag?: number | null
+          comms_rs232_diag?: number | null
+          coolant_pressure?: number | null
           coolant_temperature?: number | null
+          coolant_temperature_warning?: number | null
           cpu_usage?: number | null
+          crankcase_pressure_warning?: number | null
           created_at?: string
           dash_temp?: number | null
           device_up_time?: number | null
           drive_speed?: number | null
+          driver_switch_6?: number | null
+          engine_crankcase_pressure?: number | null
+          engine_efficiency?: number | null
+          engine_load?: number | null
+          engine_load_average?: number | null
           engine_oil_pressure?: number | null
+          engine_oil_temp_warning?: number | null
           engine_oil_temperature?: number | null
+          engine_overrun_state?: number | null
+          engine_run_hours_total?: number | null
+          engine_run_switch?: number | null
+          engine_run_time?: number | null
           engine_speed?: number | null
+          engine_speed_limit?: number | null
+          engine_speed_limit_state?: number | null
+          engine_speed_reference_state?: number | null
+          engine_speed_warning?: number | null
+          engine_state?: number | null
+          exhaust_lambda?: number | null
+          exhaust_lambda_bank_1?: number | null
+          exhaust_temperature?: number | null
           file_id?: string
           fuel_inj_primary_duty_cycle?: number | null
+          fuel_inj_primary_press?: number | null
+          fuel_inj_sec_contribution?: number | null
+          fuel_inj_secondary_duty_cycle?: number | null
+          fuel_inj_secondary_press?: number | null
+          fuel_mixture_aim?: number | null
+          fuel_output_cut_average?: number | null
+          fuel_output_cut_count?: number | null
+          fuel_pres_direct?: number | null
+          fuel_pres_direct_aim?: number | null
           fuel_pressure_sensor?: number | null
+          fuel_pressure_warning?: number | null
+          fuel_pump_state?: number | null
           fuel_temperature?: number | null
+          fuel_timing_primary?: number | null
+          fuel_timing_secondary?: number | null
           fuel_used_m1?: number | null
           g_force_lat?: number | null
           g_force_long?: number | null
@@ -416,29 +1084,285 @@ export type Database = {
           gear_detect_value?: number | null
           gps_altitude?: number | null
           gps_date?: string | null
+          gps_dop?: number | null
+          gps_hdop?: number | null
           gps_heading?: number | null
           gps_latitude?: number | null
           gps_longitude?: number | null
+          gps_quality?: number | null
           gps_sats_used?: number | null
           gps_speed?: number | null
           gps_time?: string | null
+          gps_valid?: number | null
+          gps_vdop?: number | null
           ground_speed?: number | null
           id?: string
+          ignition_cut_state?: number | null
+          ignition_cyl_1_knock_level?: number | null
+          ignition_cyl_1_trim_knock?: number | null
           ignition_timing?: number | null
+          ignition_timing_state?: number | null
+          imu_temp?: number | null
           inlet_air_temperature?: number | null
+          inlet_cam_bank1_duty_cycle?: number | null
+          inlet_cam_bank2_duty_cycle?: number | null
+          inlet_camshaft_aim?: number | null
+          inlet_camshaft_bank1_position?: number | null
+          inlet_camshaft_bank2_position?: number | null
           inlet_manifold_pressure?: number | null
+          inlet_mass_flow?: number | null
+          keypad_button_1?: number | null
+          keypad_button_2?: number | null
+          keypad_button_3?: number | null
+          keypad_button_4?: number | null
+          keypad_button_5?: number | null
+          keypad_button_6?: number | null
+          keypad_button_7?: number | null
+          keypad_button_8?: number | null
+          knock_state?: number | null
+          knock_threshold?: number | null
+          knock_warning?: number | null
           lap_distance?: number | null
+          lap_gain_loss_final?: number | null
           lap_gain_loss_running?: number | null
           lap_number?: number | null
           lap_time?: number | null
           lap_time_predicted?: number | null
+          lateral_acceleration?: number | null
+          launch_diagnostic?: number | null
+          launch_state?: number | null
+          launch_switch?: number | null
+          lf_rotor_temp_01_2?: number | null
+          lf_rotor_temp_02_2?: number | null
+          lf_rotor_temp_03_2?: number | null
+          lf_rotor_temp_04_2?: number | null
+          lf_rotor_temp_05_2?: number | null
+          lf_rotor_temp_06_2?: number | null
+          lf_rotor_temp_07_2?: number | null
+          lf_rotor_temp_08_2?: number | null
+          lf_rotor_temp_09_2?: number | null
+          lf_rotor_temp_10_2?: number | null
+          lf_rotor_temp_11_2?: number | null
+          lf_rotor_temp_12_2?: number | null
+          lf_rotor_temp_13_2?: number | null
+          lf_rotor_temp_14_2?: number | null
+          lf_rotor_temp_15_2?: number | null
+          lf_rotor_temp_16_2?: number | null
+          lf_sensor_temp_2?: number | null
+          lf_tire_temp_01?: number | null
+          lf_tire_temp_02?: number | null
+          lf_tire_temp_03?: number | null
+          lf_tire_temp_04?: number | null
+          lf_tire_temp_05?: number | null
+          lf_tire_temp_06?: number | null
+          lf_tire_temp_07?: number | null
+          lf_tire_temp_08?: number | null
+          lf_tire_temp_09?: number | null
+          lf_tire_temp_10?: number | null
+          lf_tire_temp_11?: number | null
+          lf_tire_temp_12?: number | null
+          lf_tire_temp_13?: number | null
+          lf_tire_temp_14?: number | null
+          lf_tire_temp_15?: number | null
+          lf_tire_temp_16?: number | null
+          log_data_available?: number | null
+          log_memory_busy?: number | null
+          log_time_remaining?: number | null
+          log_unloading?: number | null
+          logging_running?: number | null
+          logging_system_1_used?: number | null
+          longitudinal_acceleration?: number | null
+          lr_rotor_temp_01_2?: number | null
+          lr_rotor_temp_02_2?: number | null
+          lr_rotor_temp_03_2?: number | null
+          lr_rotor_temp_04_2?: number | null
+          lr_rotor_temp_05_2?: number | null
+          lr_rotor_temp_06_2?: number | null
+          lr_rotor_temp_07_2?: number | null
+          lr_rotor_temp_08_2?: number | null
+          lr_rotor_temp_09_2?: number | null
+          lr_rotor_temp_10_2?: number | null
+          lr_rotor_temp_11_2?: number | null
+          lr_rotor_temp_12_2?: number | null
+          lr_rotor_temp_13_2?: number | null
+          lr_rotor_temp_14_2?: number | null
+          lr_rotor_temp_15_2?: number | null
+          lr_rotor_temp_16_2?: number | null
+          lr_sensor_temp_2?: number | null
+          lr_tire_temp_01?: number | null
+          lr_tire_temp_02?: number | null
+          lr_tire_temp_03?: number | null
+          lr_tire_temp_04?: number | null
+          lr_tire_temp_05?: number | null
+          lr_tire_temp_06?: number | null
+          lr_tire_temp_07?: number | null
+          lr_tire_temp_08?: number | null
+          lr_tire_temp_09?: number | null
+          lr_tire_temp_10?: number | null
+          lr_tire_temp_11?: number | null
+          lr_tire_temp_12?: number | null
+          lr_tire_temp_13?: number | null
+          lr_tire_temp_14?: number | null
+          lr_tire_temp_15?: number | null
+          lr_tire_temp_16?: number | null
+          max_straight_speed?: number | null
+          min_corner_speed?: number | null
+          odometer?: number | null
+          pdm_fault_flag?: number | null
+          pdm_input_1_state?: number | null
+          pdm_input_1_voltage?: number | null
+          pdm_input_11_state?: number | null
+          pdm_input_11_voltage?: number | null
+          pdm_input_12_state?: number | null
+          pdm_input_12_voltage?: number | null
+          pdm_input_5_state?: number | null
+          pdm_input_5_voltage?: number | null
+          pdm_internal_9_5v?: number | null
+          pdm_output_1_current?: number | null
+          pdm_output_1_load?: number | null
+          pdm_output_1_status?: number | null
+          pdm_output_1_voltage?: number | null
+          pdm_output_10_current?: number | null
+          pdm_output_10_load?: number | null
+          pdm_output_10_status?: number | null
+          pdm_output_10_voltage?: number | null
+          pdm_output_11_current?: number | null
+          pdm_output_11_load?: number | null
+          pdm_output_11_status?: number | null
+          pdm_output_11_voltage?: number | null
+          pdm_output_12_current?: number | null
+          pdm_output_12_load?: number | null
+          pdm_output_12_status?: number | null
+          pdm_output_12_voltage?: number | null
+          pdm_output_13_current?: number | null
+          pdm_output_13_load?: number | null
+          pdm_output_13_status?: number | null
+          pdm_output_13_voltage?: number | null
+          pdm_output_14_current?: number | null
+          pdm_output_14_load?: number | null
+          pdm_output_14_status?: number | null
+          pdm_output_14_voltage?: number | null
+          pdm_output_15_current?: number | null
+          pdm_output_15_load?: number | null
+          pdm_output_15_status?: number | null
+          pdm_output_15_voltage?: number | null
+          pdm_output_2_current?: number | null
+          pdm_output_2_load?: number | null
+          pdm_output_2_status?: number | null
+          pdm_output_2_voltage?: number | null
+          pdm_output_3_current?: number | null
+          pdm_output_3_load?: number | null
+          pdm_output_3_status?: number | null
+          pdm_output_3_voltage?: number | null
+          pdm_output_4_current?: number | null
+          pdm_output_4_load?: number | null
+          pdm_output_4_status?: number | null
+          pdm_output_4_voltage?: number | null
+          pdm_output_9_current?: number | null
+          pdm_output_9_load?: number | null
+          pdm_output_9_status?: number | null
+          pdm_output_9_voltage?: number | null
+          pdm_reset_source?: number | null
+          pdm_temp?: number | null
+          pdm_total_current?: number | null
+          pitch_rotational_rate?: number | null
+          race_time_reset_switch?: number | null
           reference_lap_time?: number | null
+          reference_lap_time_reset?: number | null
+          rf_rotor_temp_01_2?: number | null
+          rf_rotor_temp_02_2?: number | null
+          rf_rotor_temp_03_2?: number | null
+          rf_rotor_temp_04_2?: number | null
+          rf_rotor_temp_05_2?: number | null
+          rf_rotor_temp_06_2?: number | null
+          rf_rotor_temp_07_2?: number | null
+          rf_rotor_temp_08_2?: number | null
+          rf_rotor_temp_09_2?: number | null
+          rf_rotor_temp_10_2?: number | null
+          rf_rotor_temp_11_2?: number | null
+          rf_rotor_temp_12_2?: number | null
+          rf_rotor_temp_13_2?: number | null
+          rf_rotor_temp_14_2?: number | null
+          rf_rotor_temp_15_2?: number | null
+          rf_rotor_temp_16_2?: number | null
+          rf_sensor_temp_2?: number | null
+          rf_tire_temp_01?: number | null
+          rf_tire_temp_02?: number | null
+          rf_tire_temp_03?: number | null
+          rf_tire_temp_04?: number | null
+          rf_tire_temp_05?: number | null
+          rf_tire_temp_06?: number | null
+          rf_tire_temp_07?: number | null
+          rf_tire_temp_08?: number | null
+          rf_tire_temp_09?: number | null
+          rf_tire_temp_10?: number | null
+          rf_tire_temp_11?: number | null
+          rf_tire_temp_12?: number | null
+          rf_tire_temp_13?: number | null
+          rf_tire_temp_14?: number | null
+          rf_tire_temp_15?: number | null
+          rf_tire_temp_16?: number | null
+          roll_rotational_rate?: number | null
+          rr_rotor_temp_01_2?: number | null
+          rr_rotor_temp_02_2?: number | null
+          rr_rotor_temp_03_2?: number | null
+          rr_rotor_temp_04_2?: number | null
+          rr_rotor_temp_05_2?: number | null
+          rr_rotor_temp_06_2?: number | null
+          rr_rotor_temp_07_2?: number | null
+          rr_rotor_temp_08_2?: number | null
+          rr_rotor_temp_09_2?: number | null
+          rr_rotor_temp_10_2?: number | null
+          rr_rotor_temp_11_2?: number | null
+          rr_rotor_temp_12_2?: number | null
+          rr_rotor_temp_13_2?: number | null
+          rr_rotor_temp_14_2?: number | null
+          rr_rotor_temp_15_2?: number | null
+          rr_rotor_temp_16_2?: number | null
+          rr_sensor_temp_2?: number | null
+          rr_tire_temp_01?: number | null
+          rr_tire_temp_02?: number | null
+          rr_tire_temp_03?: number | null
+          rr_tire_temp_04?: number | null
+          rr_tire_temp_05?: number | null
+          rr_tire_temp_06?: number | null
+          rr_tire_temp_07?: number | null
+          rr_tire_temp_08?: number | null
+          rr_tire_temp_09?: number | null
+          rr_tire_temp_10?: number | null
+          rr_tire_temp_11?: number | null
+          rr_tire_temp_12?: number | null
+          rr_tire_temp_13?: number | null
+          rr_tire_temp_14?: number | null
+          rr_tire_temp_15?: number | null
+          rr_tire_temp_16?: number | null
+          rtc_utc_time?: number | null
           running_lap_time?: number | null
           session_id?: string
+          session_reset?: number | null
+          session_time?: number | null
+          shock_displacment_fl?: number | null
+          shock_displacment_fr?: number | null
+          shock_displacment_rl?: number | null
+          shock_displacment_rr?: number | null
+          throttle_aim_state?: number | null
           throttle_pedal?: number | null
           throttle_position?: number | null
           time?: number | null
           trip_distance?: number | null
+          vehicle_accel_lateral?: number | null
+          vehicle_accel_long?: number | null
+          vehicle_accel_vert?: number | null
+          vehicle_speed?: number | null
+          vehicle_yaw_rate?: number | null
+          vertical_acceleration?: number | null
+          warning_light?: number | null
+          warning_source?: number | null
+          wheel_speed_fl?: number | null
+          wheel_speed_fr?: number | null
+          wheel_speed_rl?: number | null
+          wheel_speed_rr?: number | null
+          yaw_rotational_rate?: number | null
         }
         Relationships: []
       }
