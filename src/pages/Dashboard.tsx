@@ -453,26 +453,64 @@ const Dashboard = () => {
 
         toast({
           title: "Processing Started",
-          description: "File uploaded. Processing telemetry data in background...",
+          description: "File uploaded. Processing telemetry data...",
         });
 
-        // Step 4: Call edge function to process the file data
-        const { error: functionError } = await supabase.functions.invoke('process-telemetry', {
-          body: {
-            fileId: fileRecord.id,
-            sessionId: sessionId
+        // Step 4: Process file using web worker
+        const worker = new Worker(new URL('../workers/telemetryProcessor.ts', import.meta.url), {
+          type: 'module'
+        });
+
+        worker.onmessage = (e) => {
+          const { type, progress, processed, total, message, insertedRows, error } = e.data;
+
+          if (type === 'status') {
+            toast({
+              title: "Processing",
+              description: message,
+            });
+          } else if (type === 'progress') {
+            // Progress updates will be shown in the UI automatically via polling
+            fetchFileStatuses();
+          } else if (type === 'complete') {
+            worker.terminate();
+            toast({
+              title: "Processing Complete",
+              description: message,
+            });
+            fetchSessions();
+            fetchFileStatuses();
+          } else if (type === 'error') {
+            worker.terminate();
+            toast({
+              title: "Processing Failed",
+              description: error,
+              variant: "destructive",
+            });
+            fetchFileStatuses();
           }
-        });
+        };
 
-        if (functionError) {
-          console.error('Edge function error:', functionError);
+        worker.onerror = (error) => {
+          console.error('Worker error:', error);
+          worker.terminate();
           toast({
-            title: "Processing Error",
-            description: "Failed to start processing. Please try again.",
+            title: "Processing Failed",
+            description: "An error occurred while processing the file.",
             variant: "destructive",
           });
-          return;
-        }
+        };
+
+        // Get user's access token
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        worker.postMessage({
+          type: 'process',
+          fileId: fileRecord.id,
+          sessionId: sessionId,
+          filePath: filePath,
+          accessToken: session?.access_token || ''
+        });
 
         // Refresh file statuses to show processing
         fetchFileStatuses();
