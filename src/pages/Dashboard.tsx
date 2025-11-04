@@ -467,6 +467,11 @@ const Dashboard = () => {
         worker.onmessage = (e) => {
           const { type, progress, processed, total, message, insertedRows, error } = e.data;
 
+          if (type === 'debug') {
+            console.log('[Worker Debug]:', message);
+            return;
+          }
+
           if (type === 'status') {
             toast({
               title: "Processing",

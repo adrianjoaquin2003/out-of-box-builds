@@ -156,6 +156,18 @@ self.onmessage = async (e: MessageEvent<ProcessMessage>) => {
         file_id: fileId
       };
 
+      // Debug first row - send to main thread
+      if (processedRows === 0) {
+        self.postMessage({
+          type: 'debug',
+          message: `First row has ${values.length} values. First 5 values: ${values.slice(0, 5).join(' | ')}`
+        });
+        self.postMessage({
+          type: 'debug', 
+          message: `Headers count: ${headers.length}. First 5 headers: ${headers.slice(0, 5).join(' | ')}`
+        });
+      }
+
       // Map columns
       for (let j = 0; j < headers.length; j++) {
         const header = headers[j];
@@ -171,7 +183,10 @@ self.onmessage = async (e: MessageEvent<ProcessMessage>) => {
         if (dbColumn === 'gps_time' || dbColumn === 'gps_date') {
           row[dbColumn] = value;
           if (processedRows === 0) {
-            console.log(`String field ${dbColumn}: "${value}"`);
+            self.postMessage({ 
+              type: 'debug', 
+              message: `String ${dbColumn} = "${value}"` 
+            });
           }
           continue;
         }
@@ -179,8 +194,11 @@ self.onmessage = async (e: MessageEvent<ProcessMessage>) => {
         // Parse numeric values
         const numValue = parseFloat(value);
         
-        if (processedRows === 0 && j < 15) {
-          console.log(`Col ${j} [${header}]->[${dbColumn}]: value="${value}", parsed=${numValue}, isNaN=${isNaN(numValue)}`);
+        if (processedRows === 0 && j < 10) {
+          self.postMessage({
+            type: 'debug',
+            message: `Col ${j}: [${header}]->[${dbColumn}] value="${value}" parsed=${numValue} isNaN=${isNaN(numValue)}`
+          });
         }
         
         if (!isNaN(numValue)) {
