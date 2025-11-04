@@ -28,6 +28,7 @@ interface FileStatus {
   session_id: string;
   file_name: string;
   upload_status: 'pending' | 'processing' | 'processed' | 'failed';
+  processing_progress: number;
   created_at: string;
 }
 
@@ -255,7 +256,7 @@ const Dashboard = () => {
     try {
       const { data, error } = await supabase
         .from('uploaded_files')
-        .select('id, session_id, file_name, upload_status, created_at')
+        .select('id, session_id, file_name, upload_status, processing_progress, created_at')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -408,7 +409,7 @@ const Dashboard = () => {
         const pollInterval = setInterval(async () => {
           const { data: fileStatus } = await supabase
             .from('uploaded_files')
-            .select('upload_status')
+            .select('upload_status, processing_progress')
             .eq('id', fileRecord.id)
             .single();
 
@@ -427,6 +428,9 @@ const Dashboard = () => {
               description: "Failed to process telemetry data. Please check the file format.",
               variant: "destructive",
             });
+            fetchFileStatuses();
+          } else {
+            // Update file statuses to reflect progress
             fetchFileStatuses();
           }
         }, 3000); // Poll every 3 seconds
@@ -715,13 +719,28 @@ const Dashboard = () => {
                   
                   {/* File Status Indicators */}
                   {getSessionFiles(session.id).length > 0 && (
-                    <div className="mt-3 pt-3 border-t space-y-1">
+                    <div className="mt-3 pt-3 border-t space-y-2">
                       {getSessionFiles(session.id).map((file) => (
-                        <div key={file.id} className="flex items-center justify-between text-xs">
-                          <span className="text-muted-foreground truncate max-w-[150px]">
-                            {file.file_name.replace('.deflate', '')}
-                          </span>
-                          {getFileStatusBadge(file.upload_status)}
+                        <div key={file.id} className="space-y-1">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-muted-foreground truncate max-w-[150px]">
+                              {file.file_name.replace('.deflate', '')}
+                            </span>
+                            {getFileStatusBadge(file.upload_status)}
+                          </div>
+                          {file.upload_status === 'processing' && (
+                            <div className="space-y-1">
+                              <div className="w-full bg-secondary rounded-full h-1.5">
+                                <div 
+                                  className="bg-primary h-1.5 rounded-full transition-all duration-500"
+                                  style={{ width: `${file.processing_progress || 0}%` }}
+                                />
+                              </div>
+                              <div className="text-xs text-muted-foreground text-right">
+                                {file.processing_progress || 0}%
+                              </div>
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>

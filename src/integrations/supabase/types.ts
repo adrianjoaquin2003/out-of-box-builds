@@ -449,6 +449,7 @@ export type Database = {
           file_path: string
           file_size: number | null
           id: string
+          processing_progress: number | null
           session_id: string
           upload_status: string
           user_id: string
@@ -459,6 +460,7 @@ export type Database = {
           file_path: string
           file_size?: number | null
           id?: string
+          processing_progress?: number | null
           session_id: string
           upload_status?: string
           user_id: string
@@ -469,6 +471,7 @@ export type Database = {
           file_path?: string
           file_size?: number | null
           id?: string
+          processing_progress?: number | null
           session_id?: string
           upload_status?: string
           user_id?: string

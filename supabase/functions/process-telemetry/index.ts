@@ -388,11 +388,14 @@ async function processData(supabase: any, fileId: string, sessionId: string) {
           currentBatch = []; // Clear batch to free memory
           
           // Update progress every 10 batches
-          if (insertedRows % 1000 === 0) {
+          if (insertedRows % 500 === 0) {
+            // Estimate progress based on rows processed (rough estimate)
+            const estimatedProgress = Math.min(95, Math.floor((insertedRows / 10000) * 100));
             await supabase
               .from('uploaded_files')
               .update({ 
                 upload_status: 'processing',
+                processing_progress: estimatedProgress,
                 updated_at: new Date().toISOString()
               })
               .eq('id', fileId);
@@ -513,7 +516,10 @@ async function processData(supabase: any, fileId: string, sessionId: string) {
 
     await supabase
       .from('uploaded_files')
-      .update({ upload_status: 'processed' })
+      .update({ 
+        upload_status: 'processed',
+        processing_progress: 100
+      })
       .eq('id', fileId);
 
     console.log('File processing completed successfully');
