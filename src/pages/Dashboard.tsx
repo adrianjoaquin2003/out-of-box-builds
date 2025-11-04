@@ -347,12 +347,84 @@ const Dashboard = () => {
       }
 
       toast({
-        title: "Uploading File",
-        description: `Uploading ${file.name}...`,
+        title: "Analyzing File",
+        description: `Extracting column headers from ${file.name}...`,
       });
 
       try {
-        // Compress and upload file
+        // Step 1: Extract column headers from CSV
+        const reader = new FileReader();
+        const headers = await new Promise<Array<{ csvHeader: string; dbColumn: string; unit: string }>>((resolve, reject) => {
+          reader.onload = (e) => {
+            try {
+              const text = e.target?.result as string;
+              const lines = text.split('\n');
+              
+              if (lines.length < 17) {
+                reject(new Error('File too short to be valid telemetry data'));
+                return;
+              }
+              
+              const headerLine = lines[14];
+              const headers = headerLine.split(',').map(h => h.trim().replace(/"/g, ''));
+              
+              const unitsLine = lines[15];
+              const units = unitsLine.split(',').map(u => u.trim().replace(/"/g, ''));
+              
+              // Sanitize column names
+              const sanitizeColumnName = (name: string): string => {
+                return name
+                  .toLowerCase()
+                  .replace(/[^a-z0-9]+/g, '_')
+                  .replace(/^_+|_+$/g, '')
+                  .substring(0, 63);
+              };
+              
+              const columnDefs = headers.map((header, idx) => ({
+                csvHeader: header,
+                dbColumn: sanitizeColumnName(header),
+                unit: units[idx] || ''
+              }));
+              
+              resolve(columnDefs);
+            } catch (error) {
+              reject(error);
+            }
+          };
+          reader.onerror = () => reject(new Error('Failed to read file'));
+          reader.readAsText(file);
+        });
+
+        console.log('Extracted', headers.length, 'columns from CSV');
+
+        toast({
+          title: "Preparing Database",
+          description: "Adding column definitions to database...",
+        });
+
+        // Step 2: Add columns to database
+        const { data: columnResult, error: columnError } = await supabase.functions.invoke('add-telemetry-columns', {
+          body: { columns: headers }
+        });
+
+        if (columnError) {
+          console.error('Column addition error:', columnError);
+          toast({
+            title: "Database Error",
+            description: "Failed to prepare database columns. Please try again.",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        console.log('Column addition result:', columnResult);
+
+        toast({
+          title: "Uploading File",
+          description: `Compressing and uploading ${file.name}...`,
+        });
+
+        // Step 3: Compress and upload file
         const compressedBlob = await compressCsvFile(file);
         const compressedFileName = file.name + '.deflate';
         const filePath = `${user?.id}/${sessionId}/${Date.now()}_${compressedFileName}`;
@@ -384,7 +456,7 @@ const Dashboard = () => {
           description: "File uploaded. Processing telemetry data in background...",
         });
 
-        // Call edge function to process the file
+        // Step 4: Call edge function to process the file data
         const { error: functionError } = await supabase.functions.invoke('process-telemetry', {
           body: {
             fileId: fileRecord.id,

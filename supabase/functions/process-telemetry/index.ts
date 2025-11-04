@@ -219,56 +219,16 @@ async function processData(supabase: any, fileId: string, sessionId: string) {
 
     // Build complete column map including unmapped columns
     const columnMap: Record<string, string> = { ...baseColumnMap };
-    const newColumns: Array<{ csvHeader: string; dbColumn: string; unit: string }> = [];
     
     for (let i = 0; i < headers.length; i++) {
       const header = headers[i];
       if (!columnMap[header] && header) {
         const dbColumn = sanitizeColumnName(header);
         columnMap[header] = dbColumn;
-        newColumns.push({ csvHeader: header, dbColumn, unit: units[i] || '' });
       }
     }
 
-    console.log('Detected new columns not in base map:', newColumns.length);
-    
-    // Add missing columns to the database dynamically (in batches to save memory)
-    if (newColumns.length > 0) {
-      console.log('Adding missing columns to database...');
-      
-      // Process columns in smaller batches to avoid memory issues
-      const batchSize = 5;
-      for (let i = 0; i < newColumns.length; i += batchSize) {
-        const batch = newColumns.slice(i, i + batchSize);
-        
-        await Promise.all(batch.map(async ({ csvHeader, dbColumn }) => {
-          try {
-            const isStringField = (csvHeader.toLowerCase().includes('time') && 
-                                 csvHeader.toLowerCase().includes('gps')) ||
-                                 csvHeader.toLowerCase().includes('date');
-            const columnType = isStringField ? 'text' : 'real';
-            
-            const { error } = await supabase.rpc('add_telemetry_column', {
-              column_name: dbColumn,
-              column_type: columnType
-            });
-            
-            if (error && !error.message?.includes('already exists')) {
-              console.error(`Error adding column ${dbColumn}:`, error);
-            }
-          } catch (error) {
-            console.error(`Failed to add column ${dbColumn}:`, error);
-          }
-        }));
-        
-        // Small delay between batches to reduce memory pressure
-        if (i + batchSize < newColumns.length) {
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
-      }
-      
-      console.log('Finished adding columns');
-    }
+    console.log('Using column map with', Object.keys(columnMap).length, 'columns');
 
     // Re-download and process data rows line-by-line via stream
     console.log('Starting to process data rows...');
