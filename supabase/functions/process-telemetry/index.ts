@@ -277,6 +277,9 @@ async function processData(supabase: any, fileId: string, sessionId: string) {
           if (dbColumn === 'gps_time' || dbColumn === 'gps_date') {
             row[dbColumn] = value;
           } else {
+            // Define integer columns
+            const integerColumns = ['lap_number', 'gps_sats_used', 'engine_speed', 'gear'];
+            
             // Parse numeric values
             let numValue = parseFloat(value);
             if (!isNaN(numValue)) {
@@ -288,7 +291,13 @@ async function processData(supabase: any, fileId: string, sessionId: string) {
                   numValue = numValue * 1.60934;
                 }
               }
-              row[dbColumn] = numValue;
+              
+              // Round to integer for integer columns
+              if (integerColumns.includes(dbColumn)) {
+                row[dbColumn] = Math.round(numValue);
+              } else {
+                row[dbColumn] = numValue;
+              }
             }
           }
         }
