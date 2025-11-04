@@ -150,7 +150,14 @@ self.onmessage = async (e: MessageEvent<ProcessMessage>) => {
     for (const line of dataLines) {
       if (!line.trim()) continue;
 
-      const values = line.split(',').map(v => v.trim());
+      const values = line.split(',').map(v => {
+        let val = v.trim();
+        // Remove surrounding quotes if present
+        if (val.startsWith('"') && val.endsWith('"')) {
+          val = val.slice(1, -1);
+        }
+        return val;
+      });
       const row: TelemetryRow = {
         session_id: sessionId,
         file_id: fileId
