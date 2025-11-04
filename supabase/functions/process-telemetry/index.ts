@@ -232,37 +232,42 @@ async function processData(supabase: any, fileId: string, sessionId: string) {
 
     console.log('Detected new columns not in base map:', newColumns.length);
     
-    // Add missing columns to the database dynamically
+    // Add missing columns to the database dynamically (in batches to save memory)
     if (newColumns.length > 0) {
       console.log('Adding missing columns to database...');
-
-      for (const { csvHeader, dbColumn, unit } of newColumns) {
-        console.log(`Adding new column: ${dbColumn} (from CSV: ${csvHeader})`);
+      
+      // Process columns in smaller batches to avoid memory issues
+      const batchSize = 5;
+      for (let i = 0; i < newColumns.length; i += batchSize) {
+        const batch = newColumns.slice(i, i + batchSize);
         
-        try {
-          // Determine column type based on whether it looks like a string field
-          const isStringField = (csvHeader.toLowerCase().includes('time') && 
-                               csvHeader.toLowerCase().includes('gps')) ||
-                               csvHeader.toLowerCase().includes('date');
-          const columnType = isStringField ? 'text' : 'real';
-          
-          // Use the database function to add the column safely
-          const { error } = await supabase.rpc('add_telemetry_column', {
-            column_name: dbColumn,
-            column_type: columnType
-          });
-          
-          if (error) {
-            console.error(`Error adding column ${dbColumn}:`, error);
-            // Continue processing - column might already exist
-          } else {
-            console.log(`Successfully added column: ${dbColumn}`);
+        await Promise.all(batch.map(async ({ csvHeader, dbColumn }) => {
+          try {
+            const isStringField = (csvHeader.toLowerCase().includes('time') && 
+                                 csvHeader.toLowerCase().includes('gps')) ||
+                                 csvHeader.toLowerCase().includes('date');
+            const columnType = isStringField ? 'text' : 'real';
+            
+            const { error } = await supabase.rpc('add_telemetry_column', {
+              column_name: dbColumn,
+              column_type: columnType
+            });
+            
+            if (error && !error.message?.includes('already exists')) {
+              console.error(`Error adding column ${dbColumn}:`, error);
+            }
+          } catch (error) {
+            console.error(`Failed to add column ${dbColumn}:`, error);
           }
-        } catch (error) {
-          console.error(`Failed to add column ${dbColumn}:`, error);
-          // Continue processing
+        }));
+        
+        // Small delay between batches to reduce memory pressure
+        if (i + batchSize < newColumns.length) {
+          await new Promise(resolve => setTimeout(resolve, 100));
         }
       }
+      
+      console.log('Finished adding columns');
     }
 
     // Re-download and process data rows line-by-line via stream
@@ -286,7 +291,7 @@ async function processData(supabase: any, fileId: string, sessionId: string) {
     
     let processedRows = 0;
     let insertedRows = 0;
-    const batchSize = 100; // Reduced batch size for large files
+    const batchSize = 50; // Smaller batch size to reduce memory usage
     let currentBatch: TelemetryRow[] = [];
     const fieldsWithData = new Set<string>();
     
