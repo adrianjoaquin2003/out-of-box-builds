@@ -169,7 +169,11 @@ self.onmessage = async (e: MessageEvent<ProcessMessage>) => {
           if (dbColumn === 'gps_time' || dbColumn === 'gps_date') {
             row[dbColumn] = value;
           } else {
-            // Parse numeric values
+            // Parse numeric values - only skip if truly empty
+            if (value === '' || value === null || value === undefined) {
+              continue;
+            }
+            
             let numValue = parseFloat(value);
             if (!isNaN(numValue)) {
               // Convert speed units to km/h
