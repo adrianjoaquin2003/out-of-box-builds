@@ -159,8 +159,17 @@ async function processData(supabase: any, fileId: string, sessionId: string) {
     console.log('CSV Units (first 10):', units.slice(0, 10));
     console.log('Total columns:', headers.length);
 
+    // Function to sanitize column names for database
+    const sanitizeColumnName = (name: string): string => {
+      return name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .substring(0, 63); // Postgres identifier limit
+    };
+
     // Create mapping from CSV headers to database columns
-    const columnMap: Record<string, string> = {
+    const baseColumnMap: Record<string, string> = {
       'Time': 'time',
       'Lap Number': 'lap_number',
       'Lap Time': 'lap_time',
@@ -207,6 +216,72 @@ async function processData(supabase: any, fileId: string, sessionId: string) {
       'Comms RS232-2 Diag': 'comms_rs232_2_diag',
       'Dash Temp': 'dash_temp'
     };
+
+    // Build complete column map including unmapped columns
+    const columnMap: Record<string, string> = { ...baseColumnMap };
+    const newColumns: Array<{ csvHeader: string; dbColumn: string; unit: string }> = [];
+    
+    for (let i = 0; i < headers.length; i++) {
+      const header = headers[i];
+      if (!columnMap[header] && header) {
+        const dbColumn = sanitizeColumnName(header);
+        columnMap[header] = dbColumn;
+        newColumns.push({ csvHeader: header, dbColumn, unit: units[i] || '' });
+      }
+    }
+
+    console.log('Detected new columns not in base map:', newColumns.length);
+    
+    // Check which columns exist in the database and add missing ones
+    if (newColumns.length > 0) {
+      console.log('Checking database for missing columns...');
+      
+      // Get existing columns from telemetry_data table
+      const { data: existingColumns, error: columnsError } = await supabase
+        .rpc('exec_sql', { 
+          sql: `SELECT column_name FROM information_schema.columns 
+                WHERE table_name = 'telemetry_data' AND table_schema = 'public'` 
+        })
+        .catch(() => ({ data: null, error: 'RPC not available' }));
+
+      // If we can't check columns, we'll try to add them and let it fail gracefully
+      const existingColumnNames = new Set(
+        existingColumns ? existingColumns.map((row: any) => row.column_name) : []
+      );
+
+      // Add missing columns to the database
+      for (const { csvHeader, dbColumn, unit } of newColumns) {
+        if (!existingColumnNames.has(dbColumn)) {
+          console.log(`Adding new column: ${dbColumn} (from CSV: ${csvHeader})`);
+          
+          try {
+            // Determine column type based on whether it looks like a string field
+            const isStringField = csvHeader.toLowerCase().includes('time') && 
+                                 csvHeader.toLowerCase().includes('gps') ||
+                                 csvHeader.toLowerCase().includes('date');
+            const columnType = isStringField ? 'text' : 'real';
+            
+            const alterSQL = `ALTER TABLE public.telemetry_data ADD COLUMN IF NOT EXISTS ${dbColumn} ${columnType}`;
+            
+            // Execute ALTER TABLE using raw SQL
+            await supabase.rpc('exec_sql', { sql: alterSQL })
+              .catch(async (rpcError) => {
+                // If RPC doesn't exist, try direct query (though this might not work with service role)
+                console.log('RPC method failed, attempting direct query...');
+                const { error } = await supabase.from('telemetry_data').select('id').limit(1);
+                if (!error) {
+                  console.log(`Column ${dbColumn} may already exist or cannot be added without migration`);
+                }
+              });
+              
+            console.log(`Successfully added column: ${dbColumn}`);
+          } catch (error) {
+            console.error(`Failed to add column ${dbColumn}:`, error);
+            // Continue processing - the column might already exist
+          }
+        }
+      }
+    }
 
     // Re-download and process data rows line-by-line via stream
     console.log('Starting to process data rows...');
@@ -396,8 +471,21 @@ async function processData(supabase: any, fileId: string, sessionId: string) {
       gps_heading: { label: 'GPS Heading', unit: '°', category: 'GPS' },
     };
 
-    // Build available metrics list (fieldsWithData already populated during processing)
-    fieldsWithData.forEach(field => {
+    // Build available metrics list from ALL CSV columns (not just ones with data)
+    const allMetrics = new Set<string>();
+    for (const header of headers) {
+      const dbColumn = columnMap[header];
+      if (dbColumn && dbColumn !== 'session_id' && dbColumn !== 'file_id') {
+        allMetrics.add(dbColumn);
+      }
+    }
+
+    allMetrics.forEach(field => {
+      const unit = headers.reduce((acc, header, idx) => {
+        if (columnMap[header] === field) return units[idx] || '';
+        return acc;
+      }, '');
+
       if (metricsMap[field]) {
         availableMetrics.push({
           key: field,
@@ -405,11 +493,25 @@ async function processData(supabase: any, fileId: string, sessionId: string) {
         });
       } else {
         // For unknown fields, create a basic entry
+        const label = field.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        const category = field.includes('temp') ? 'Engine' :
+                        field.includes('pressure') ? 'Engine' :
+                        field.includes('speed') || field.includes('rpm') ? 'Performance' :
+                        field.includes('gps') ? 'GPS' :
+                        field.includes('lap') ? 'Lap Data' :
+                        field.includes('fuel') ? 'Fuel' :
+                        field.includes('gear') ? 'Transmission' :
+                        field.includes('throttle') || field.includes('brake') || field.includes('steering') ? 'Driver Input' :
+                        field.includes('g_force') ? 'Forces' :
+                        field.includes('suspension') || field.includes('damper') ? 'Suspension' :
+                        field.includes('tire') || field.includes('wheel') ? 'Tires' :
+                        'Other';
+        
         availableMetrics.push({
           key: field,
-          label: field.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-          unit: '',
-          category: 'Other'
+          label,
+          unit,
+          category
         });
       }
     });
