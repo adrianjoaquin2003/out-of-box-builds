@@ -163,38 +163,37 @@ self.onmessage = async (e: MessageEvent<ProcessMessage>) => {
         const unit = units[j] || '';
         const value = values[j];
         
-        // Debug first row
-        if (processedRows === 0 && j < 10) {
-          console.log(`Column ${j}: header="${header}", dbColumn="${dbColumn}", value="${value}", type=${typeof value}`);
+        if (!dbColumn || value === undefined || value === null || value === '') {
+          continue;
+        }
+
+        // Handle string fields  
+        if (dbColumn === 'gps_time' || dbColumn === 'gps_date') {
+          row[dbColumn] = value;
+          if (processedRows === 0) {
+            console.log(`String field ${dbColumn}: "${value}"`);
+          }
+          continue;
+        }
+
+        // Parse numeric values
+        const numValue = parseFloat(value);
+        
+        if (processedRows === 0 && j < 15) {
+          console.log(`Col ${j} [${header}]->[${dbColumn}]: value="${value}", parsed=${numValue}, isNaN=${isNaN(numValue)}`);
         }
         
-        if (dbColumn && value !== undefined && value !== null && value !== '') {
-          // Handle string fields
-          if (dbColumn === 'gps_time' || dbColumn === 'gps_date') {
-            row[dbColumn] = value;
-          } else {
-            // Parse numeric values
-            const numValue = parseFloat(value);
-            if (!isNaN(numValue)) {
-              // Convert speed units to km/h
-              let convertedValue = numValue;
-              if ((dbColumn === 'ground_speed' || dbColumn === 'gps_speed' || dbColumn === 'drive_speed')) {
-                if (unit.toLowerCase() === 'm/s') {
-                  convertedValue = numValue * 3.6;
-                } else if (unit.toLowerCase() === 'mph') {
-                  convertedValue = numValue * 1.60934;
-                }
-              }
-              row[dbColumn] = convertedValue;
-              
-              // Debug first few successful parses
-              if (processedRows === 0) {
-                console.log(`Parsed ${dbColumn}: ${value} -> ${convertedValue}`);
-              }
-            } else if (processedRows === 0) {
-              console.log(`Failed to parse ${dbColumn}: "${value}" (type: ${typeof value})`);
+        if (!isNaN(numValue)) {
+          // Convert speed units to km/h
+          let convertedValue = numValue;
+          if ((dbColumn === 'ground_speed' || dbColumn === 'gps_speed' || dbColumn === 'drive_speed')) {
+            if (unit.toLowerCase() === 'm/s') {
+              convertedValue = numValue * 3.6;
+            } else if (unit.toLowerCase() === 'mph') {
+              convertedValue = numValue * 1.60934;
             }
           }
+          row[dbColumn] = convertedValue;
         }
       }
 

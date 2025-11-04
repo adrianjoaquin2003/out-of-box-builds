@@ -457,7 +457,10 @@ const Dashboard = () => {
         });
 
         // Step 4: Process file using web worker
-        const worker = new Worker(new URL('../workers/telemetryProcessor.ts', import.meta.url), {
+        // Add timestamp to bust cache
+        const workerUrl = new URL('../workers/telemetryProcessor.ts', import.meta.url);
+        workerUrl.searchParams.set('v', Date.now().toString());
+        const worker = new Worker(workerUrl, {
           type: 'module'
         });
 
