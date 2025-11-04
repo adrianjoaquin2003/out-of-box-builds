@@ -122,8 +122,9 @@ self.onmessage = async (e: MessageEvent<ProcessMessage>) => {
 
     let processedRows = 0;
     let insertedRows = 0;
-    const batchSize = 100;
+    const batchSize = 1000; // Increased from 100 for faster processing
     let currentBatch: TelemetryRow[] = [];
+    let batchesSinceUpdate = 0;
 
     // Track fields with data for available_metrics
     const fieldsWithData = new Set<string>();
@@ -210,20 +211,25 @@ self.onmessage = async (e: MessageEvent<ProcessMessage>) => {
 
         insertedRows += currentBatch.length;
         currentBatch = [];
+        batchesSinceUpdate++;
 
-        // Update progress
-        const progress = Math.floor((processedRows / totalRows) * 95);
-        await supabase
-          .from('uploaded_files')
-          .update({ processing_progress: progress })
-          .eq('id', fileId);
+        // Update progress less frequently (every 5 batches to reduce overhead)
+        if (batchesSinceUpdate >= 5) {
+          const progress = Math.floor((processedRows / totalRows) * 95);
+          await supabase
+            .from('uploaded_files')
+            .update({ processing_progress: progress })
+            .eq('id', fileId);
 
-        self.postMessage({
-          type: 'progress',
-          progress,
-          processed: processedRows,
-          total: totalRows
-        });
+          self.postMessage({
+            type: 'progress',
+            progress,
+            processed: processedRows,
+            total: totalRows
+          });
+          
+          batchesSinceUpdate = 0;
+        }
       }
     }
 

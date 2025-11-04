@@ -543,7 +543,7 @@ const Dashboard = () => {
             // Update file statuses to reflect progress
             fetchFileStatuses();
           }
-        }, 3000); // Poll every 3 seconds
+        }, 5000); // Poll every 5 seconds (reduced from 3 for efficiency)
 
         // Stop polling after 5 minutes
         setTimeout(() => clearInterval(pollInterval), 300000);
