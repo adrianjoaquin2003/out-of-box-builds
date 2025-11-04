@@ -488,6 +488,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      add_telemetry_column: {
+        Args: { column_name: string; column_type?: string }
+        Returns: undefined
+      }
       is_team_admin: {
         Args: { check_team_id: string; check_user_id: string }
         Returns: boolean

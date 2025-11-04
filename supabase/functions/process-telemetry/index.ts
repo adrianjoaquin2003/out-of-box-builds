@@ -232,53 +232,35 @@ async function processData(supabase: any, fileId: string, sessionId: string) {
 
     console.log('Detected new columns not in base map:', newColumns.length);
     
-    // Check which columns exist in the database and add missing ones
+    // Add missing columns to the database dynamically
     if (newColumns.length > 0) {
-      console.log('Checking database for missing columns...');
-      
-      // Get existing columns from telemetry_data table
-      const { data: existingColumns, error: columnsError } = await supabase
-        .rpc('exec_sql', { 
-          sql: `SELECT column_name FROM information_schema.columns 
-                WHERE table_name = 'telemetry_data' AND table_schema = 'public'` 
-        })
-        .catch(() => ({ data: null, error: 'RPC not available' }));
+      console.log('Adding missing columns to database...');
 
-      // If we can't check columns, we'll try to add them and let it fail gracefully
-      const existingColumnNames = new Set(
-        existingColumns ? existingColumns.map((row: any) => row.column_name) : []
-      );
-
-      // Add missing columns to the database
       for (const { csvHeader, dbColumn, unit } of newColumns) {
-        if (!existingColumnNames.has(dbColumn)) {
-          console.log(`Adding new column: ${dbColumn} (from CSV: ${csvHeader})`);
+        console.log(`Adding new column: ${dbColumn} (from CSV: ${csvHeader})`);
+        
+        try {
+          // Determine column type based on whether it looks like a string field
+          const isStringField = (csvHeader.toLowerCase().includes('time') && 
+                               csvHeader.toLowerCase().includes('gps')) ||
+                               csvHeader.toLowerCase().includes('date');
+          const columnType = isStringField ? 'text' : 'real';
           
-          try {
-            // Determine column type based on whether it looks like a string field
-            const isStringField = csvHeader.toLowerCase().includes('time') && 
-                                 csvHeader.toLowerCase().includes('gps') ||
-                                 csvHeader.toLowerCase().includes('date');
-            const columnType = isStringField ? 'text' : 'real';
-            
-            const alterSQL = `ALTER TABLE public.telemetry_data ADD COLUMN IF NOT EXISTS ${dbColumn} ${columnType}`;
-            
-            // Execute ALTER TABLE using raw SQL
-            await supabase.rpc('exec_sql', { sql: alterSQL })
-              .catch(async (rpcError) => {
-                // If RPC doesn't exist, try direct query (though this might not work with service role)
-                console.log('RPC method failed, attempting direct query...');
-                const { error } = await supabase.from('telemetry_data').select('id').limit(1);
-                if (!error) {
-                  console.log(`Column ${dbColumn} may already exist or cannot be added without migration`);
-                }
-              });
-              
+          // Use the database function to add the column safely
+          const { error } = await supabase.rpc('add_telemetry_column', {
+            column_name: dbColumn,
+            column_type: columnType
+          });
+          
+          if (error) {
+            console.error(`Error adding column ${dbColumn}:`, error);
+            // Continue processing - column might already exist
+          } else {
             console.log(`Successfully added column: ${dbColumn}`);
-          } catch (error) {
-            console.error(`Failed to add column ${dbColumn}:`, error);
-            // Continue processing - the column might already exist
           }
+        } catch (error) {
+          console.error(`Failed to add column ${dbColumn}:`, error);
+          // Continue processing
         }
       }
     }
