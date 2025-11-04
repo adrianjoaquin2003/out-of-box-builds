@@ -169,22 +169,19 @@ self.onmessage = async (e: MessageEvent<ProcessMessage>) => {
           if (dbColumn === 'gps_time' || dbColumn === 'gps_date') {
             row[dbColumn] = value;
           } else {
-            // Parse numeric values - only skip if truly empty
-            if (value === '' || value === null || value === undefined) {
-              continue;
-            }
-            
-            let numValue = parseFloat(value);
+            // Parse numeric values
+            const numValue = parseFloat(value);
             if (!isNaN(numValue)) {
               // Convert speed units to km/h
+              let convertedValue = numValue;
               if ((dbColumn === 'ground_speed' || dbColumn === 'gps_speed' || dbColumn === 'drive_speed')) {
                 if (unit.toLowerCase() === 'm/s') {
-                  numValue = numValue * 3.6;
+                  convertedValue = numValue * 3.6;
                 } else if (unit.toLowerCase() === 'mph') {
-                  numValue = numValue * 1.60934;
+                  convertedValue = numValue * 1.60934;
                 }
               }
-              row[dbColumn] = numValue;
+              row[dbColumn] = convertedValue;
             }
           }
         }
