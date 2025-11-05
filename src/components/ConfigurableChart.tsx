@@ -161,12 +161,27 @@ export function ConfigurableChart({
       margin: { top: 5, right: 30, left: 20, bottom: 5 },
     };
 
+    // Calculate synchronized ticks if we have a shared time domain
+    const calculateTicks = () => {
+      if (!timeDomain) return undefined;
+      
+      const [min, max] = timeDomain;
+      const range = max - min;
+      const tickCount = Math.min(15, Math.max(8, Math.floor(range / 20)));
+      const tickInterval = range / (tickCount - 1);
+      
+      return Array.from({ length: tickCount }, (_, i) => 
+        Math.round((min + i * tickInterval) * 100) / 100
+      );
+    };
+
     const xAxisProps = {
       dataKey: 'time',
       type: 'number' as const,
       label: { value: 'Time (seconds)', position: 'insideBottom', offset: -5 },
       domain: timeDomain || ([0, 'dataMax'] as [number, string]),
       scale: 'linear' as const,
+      ticks: calculateTicks(),
     };
 
     const yAxisProps = {
