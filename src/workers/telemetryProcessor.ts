@@ -50,6 +50,25 @@ const sanitizeColumnName = (name: string): string => {
     .substring(0, 63);
 };
 
+const metricsMap: Record<string, { label: string; unit: string; category: string }> = {
+  ground_speed: { label: 'Speed', unit: 'km/h', category: 'Performance' },
+  gps_speed: { label: 'GPS Speed', unit: 'km/h', category: 'Performance' },
+  drive_speed: { label: 'Drive Speed', unit: 'km/h', category: 'Performance' },
+  engine_speed: { label: 'Engine RPM', unit: 'RPM', category: 'Engine' },
+  throttle_position: { label: 'Throttle Position', unit: '%', category: 'Driver Input' },
+  throttle_pedal: { label: 'Throttle Pedal', unit: '%', category: 'Driver Input' },
+  g_force_lat: { label: 'Lateral G-Force', unit: 'G', category: 'Forces' },
+  g_force_long: { label: 'Longitudinal G-Force', unit: 'G', category: 'Forces' },
+  g_force_vert: { label: 'Vertical G-Force', unit: 'G', category: 'Forces' },
+  engine_oil_temperature: { label: 'Oil Temperature', unit: '°C', category: 'Engine' },
+  engine_oil_pressure: { label: 'Oil Pressure', unit: 'bar', category: 'Engine' },
+  coolant_temperature: { label: 'Coolant Temperature', unit: '°C', category: 'Engine' },
+  boost_pressure: { label: 'Boost Pressure', unit: 'bar', category: 'Engine' },
+  gear: { label: 'Gear', unit: '', category: 'Transmission' },
+  bat_volts_ecu: { label: 'Battery ECU', unit: 'V', category: 'Electrical' },
+  bat_volts_dash: { label: 'Battery Dash', unit: 'V', category: 'Electrical' },
+};
+
 self.onmessage = async (e: MessageEvent<ProcessMessage>) => {
   const { type, fileId, sessionId, filePath, accessToken } = e.data;
 
@@ -83,195 +102,165 @@ self.onmessage = async (e: MessageEvent<ProcessMessage>) => {
 
     if (downloadError) throw downloadError;
 
-    self.postMessage({ type: 'status', message: 'Decompressing file...' });
+    self.postMessage({ type: 'status', message: 'Processing file stream...' });
 
-    // Decompress file
+    // Process file as a stream - NO memory loading!
     const decompressedStream = fileBlob.stream().pipeThrough(new DecompressionStream('deflate'));
-    const decompressedBlob = await new Response(decompressedStream).blob();
-    const text = await decompressedBlob.text();
+    const reader = decompressedStream.getReader();
+    const decoder = new TextDecoder();
     
-    self.postMessage({ type: 'status', message: 'Parsing CSV...' });
-
-    // Parse CSV
-    const lines = text.split('\n');
+    let buffer = '';
+    let lineNumber = 0;
+    let headers: string[] = [];
+    let units: string[] = [];
+    let columnMap: Record<string, string> = {};
     
-    if (lines.length < 17) {
-      throw new Error('File too short to be valid MoTeC CSV');
-    }
-
-    // Extract headers and units
-    const headerLine = lines[14];
-    const headers = headerLine.split(',').map(h => h.trim());
-    
-    const unitsLine = lines[15];
-    const units = unitsLine.split(',').map(u => u.trim());
-
-    // Build column map
-    const columnMap: Record<string, string> = { ...baseColumnMap };
-    for (const header of headers) {
-      if (!columnMap[header] && header) {
-        columnMap[header] = sanitizeColumnName(header);
-      }
-    }
-
-    // Parse data rows
-    const dataLines = lines.slice(16).filter(line => line.trim());
-    const totalRows = dataLines.length;
-    
-    self.postMessage({ 
-      type: 'status', 
-      message: `Processing ${totalRows.toLocaleString()} rows...` 
-    });
-
     let processedRows = 0;
     let insertedRows = 0;
-    const batchSize = 5000; // Larger batches = fewer API calls = much faster
+    const batchSize = 1000;
     let currentBatch: TelemetryRow[] = [];
     let batchesSinceUpdate = 0;
-
-    // Track fields with data for available_metrics
     const fieldsWithData = new Set<string>();
-    const metricsMap: Record<string, { label: string; unit: string; category: string }> = {
-      ground_speed: { label: 'Speed', unit: 'km/h', category: 'Performance' },
-      gps_speed: { label: 'GPS Speed', unit: 'km/h', category: 'Performance' },
-      drive_speed: { label: 'Drive Speed', unit: 'km/h', category: 'Performance' },
-      engine_speed: { label: 'Engine RPM', unit: 'RPM', category: 'Engine' },
-      throttle_position: { label: 'Throttle Position', unit: '%', category: 'Driver Input' },
-      throttle_pedal: { label: 'Throttle Pedal', unit: '%', category: 'Driver Input' },
-      g_force_lat: { label: 'Lateral G-Force', unit: 'G', category: 'Forces' },
-      g_force_long: { label: 'Longitudinal G-Force', unit: 'G', category: 'Forces' },
-      g_force_vert: { label: 'Vertical G-Force', unit: 'G', category: 'Forces' },
-      engine_oil_temperature: { label: 'Oil Temperature', unit: '°C', category: 'Engine' },
-      engine_oil_pressure: { label: 'Oil Pressure', unit: 'bar', category: 'Engine' },
-      coolant_temperature: { label: 'Coolant Temperature', unit: '°C', category: 'Engine' },
-      boost_pressure: { label: 'Boost Pressure', unit: 'bar', category: 'Engine' },
-      gear: { label: 'Gear', unit: '', category: 'Transmission' },
-      bat_volts_ecu: { label: 'Battery ECU', unit: 'V', category: 'Electrical' },
-      bat_volts_dash: { label: 'Battery Dash', unit: 'V', category: 'Electrical' },
-    };
-
-    for (const line of dataLines) {
-      if (!line.trim()) continue;
-
-      // Faster parsing - split and trim in one pass
-      const values = line.split(',').map(v => {
-        const trimmed = v.trim();
-        // Remove quotes if present (check first/last char only)
-        return (trimmed[0] === '"' && trimmed[trimmed.length - 1] === '"') 
-          ? trimmed.slice(1, -1) 
-          : trimmed;
-      });
-      const row: TelemetryRow = {
-        session_id: sessionId,
-        file_id: fileId
-      };
-
-      // Debug first row - send to main thread
-      if (processedRows === 0) {
-        self.postMessage({
-          type: 'debug',
-          message: `First row has ${values.length} values. First 5 values: ${values.slice(0, 5).join(' | ')}`
-        });
-        self.postMessage({
-          type: 'debug', 
-          message: `Headers count: ${headers.length}. First 5 headers: ${headers.slice(0, 5).join(' | ')}`
-        });
+    
+    // Stream processing loop
+    while (true) {
+      const { done, value } = await reader.read();
+      
+      if (value) {
+        buffer += decoder.decode(value, { stream: !done });
       }
-
-      // Map columns
-      for (let j = 0; j < headers.length; j++) {
-        const header = headers[j];
-        const dbColumn = columnMap[header];
-        const unit = units[j] || '';
-        const value = values[j];
+      
+      // Process complete lines from buffer
+      let newlineIndex;
+      while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
+        const line = buffer.substring(0, newlineIndex).trim();
+        buffer = buffer.substring(newlineIndex + 1);
+        lineNumber++;
         
-        if (!dbColumn || value === undefined || value === null || value === '') {
+        // Line 15 = headers, Line 16 = units
+        if (lineNumber === 15) {
+          headers = line.split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+          console.log('Extracted', headers.length, 'columns from CSV');
           continue;
         }
-
-        // Handle string fields  
-        if (dbColumn === 'gps_time' || dbColumn === 'gps_date') {
-          row[dbColumn] = value;
-          if (processedRows === 0) {
-            self.postMessage({ 
-              type: 'debug', 
-              message: `String ${dbColumn} = "${value}"` 
-            });
-          }
-          continue;
-        }
-
-        // Parse numeric values
-        const numValue = parseFloat(value);
-        
-        if (processedRows === 0 && j < 10) {
-          self.postMessage({
-            type: 'debug',
-            message: `Col ${j}: [${header}]->[${dbColumn}] value="${value}" parsed=${numValue} isNaN=${isNaN(numValue)}`
-          });
-        }
-        
-        if (!isNaN(numValue)) {
-          // Convert speed units to km/h
-          let convertedValue = numValue;
-          if ((dbColumn === 'ground_speed' || dbColumn === 'gps_speed' || dbColumn === 'drive_speed')) {
-            if (unit.toLowerCase() === 'm/s') {
-              convertedValue = numValue * 3.6;
-            } else if (unit.toLowerCase() === 'mph') {
-              convertedValue = numValue * 1.60934;
+        if (lineNumber === 16) {
+          units = line.split(',').map(u => u.trim().replace(/^"|"$/g, ''));
+          
+          // Build column map
+          columnMap = { ...baseColumnMap };
+          for (const header of headers) {
+            if (!columnMap[header] && header) {
+              columnMap[header] = sanitizeColumnName(header);
             }
           }
-          row[dbColumn] = convertedValue;
+          console.log('Column map built with', Object.keys(columnMap).length, 'mappings');
+          continue;
         }
-      }
-
-      // Track fields with data (first 100 rows)
-      if (processedRows < 100) {
-        Object.keys(row).forEach(key => {
-          if (key !== 'session_id' && key !== 'file_id' && row[key] !== null && row[key] !== undefined) {
-            fieldsWithData.add(key);
-          }
+        
+        // Skip metadata and header lines
+        if (lineNumber < 17 || !line) continue;
+        
+        // Parse data row
+        const values = line.split(',').map(v => {
+          const trimmed = v.trim();
+          return (trimmed[0] === '"' && trimmed[trimmed.length - 1] === '"') 
+            ? trimmed.slice(1, -1) 
+            : trimmed;
         });
-      }
+        
+        const row: TelemetryRow = {
+          session_id: sessionId,
+          file_id: fileId
+        };
 
-      currentBatch.push(row);
-      processedRows++;
+        // Map columns
+        for (let j = 0; j < headers.length; j++) {
+          const header = headers[j];
+          const dbColumn = columnMap[header];
+          const unit = units[j] || '';
+          const value = values[j];
+          
+          if (!dbColumn || value === undefined || value === null || value === '') {
+            continue;
+          }
 
-      // Insert batch
-      if (currentBatch.length >= batchSize) {
-        const { error: insertError } = await supabase
-          .from('telemetry_data')
-          .insert(currentBatch);
+          // Handle string fields  
+          if (dbColumn === 'gps_time' || dbColumn === 'gps_date') {
+            row[dbColumn] = value;
+            continue;
+          }
 
-        if (insertError) {
-          console.error('Insert error:', insertError);
-          throw insertError;
+          // Parse numeric values
+          const numValue = parseFloat(value);
+          
+          if (!isNaN(numValue)) {
+            // Convert speed units
+            let convertedValue = numValue;
+            if ((dbColumn === 'ground_speed' || dbColumn === 'gps_speed' || dbColumn === 'drive_speed')) {
+              if (unit.toLowerCase() === 'm/s') {
+                convertedValue = numValue * 3.6;
+              } else if (unit.toLowerCase() === 'mph') {
+                convertedValue = numValue * 1.60934;
+              }
+            }
+            row[dbColumn] = convertedValue;
+          }
         }
 
-        insertedRows += currentBatch.length;
-        currentBatch = [];
-        batchesSinceUpdate++;
-
-        // Update progress less frequently (every 2 batches to reduce overhead)
-        if (batchesSinceUpdate >= 2) {
-          const progress = Math.floor((processedRows / totalRows) * 95);
-          
-          // Update DB for UI polling
-          await supabase
-            .from('uploaded_files')
-            .update({ processing_progress: progress })
-            .eq('id', fileId);
-          
-          self.postMessage({
-            type: 'progress',
-            progress,
-            processed: processedRows,
-            total: totalRows
+        // Track fields with data (first 100 rows only)
+        if (processedRows < 100) {
+          Object.keys(row).forEach(key => {
+            if (key !== 'session_id' && key !== 'file_id') {
+              fieldsWithData.add(key);
+            }
           });
-          
-          batchesSinceUpdate = 0;
+        }
+
+        currentBatch.push(row);
+        processedRows++;
+
+        // Insert batch when full
+        if (currentBatch.length >= batchSize) {
+          try {
+            const { error: insertError } = await supabase
+              .from('telemetry_data')
+              .insert(currentBatch);
+
+            if (insertError) {
+              console.error('Insert error:', insertError);
+              throw insertError;
+            }
+
+            insertedRows += currentBatch.length;
+            currentBatch = []; // Free memory immediately
+            batchesSinceUpdate++;
+
+            // Update progress every 5 batches
+            if (batchesSinceUpdate >= 5) {
+              const progress = Math.min(95, Math.floor((insertedRows / 15000) * 95));
+              
+              await supabase
+                .from('uploaded_files')
+                .update({ processing_progress: progress })
+                .eq('id', fileId);
+              
+              self.postMessage({
+                type: 'progress',
+                progress,
+                processed: processedRows,
+                total: insertedRows
+              });
+              
+              batchesSinceUpdate = 0;
+            }
+          } catch (error) {
+            console.error('Batch insert failed at row', processedRows, ':', error);
+            throw error;
+          }
         }
       }
+      
+      if (done) break;
     }
 
     // Insert remaining rows
@@ -284,10 +273,11 @@ self.onmessage = async (e: MessageEvent<ProcessMessage>) => {
       insertedRows += currentBatch.length;
     }
 
+    console.log('Processing complete. Inserted', insertedRows, 'rows');
+
     // Build available metrics list
     const availableMetrics: Array<{ key: string; label: string; unit: string; category: string }> = [];
     
-    // Use ALL columns from CSV, not just ones with data
     for (const header of headers) {
       const dbColumn = columnMap[header];
       if (!dbColumn || dbColumn === 'session_id' || dbColumn === 'file_id') continue;
