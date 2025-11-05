@@ -121,7 +121,7 @@ self.onmessage = async (e: MessageEvent<ProcessMessage>) => {
     
     let processedRows = 0;
     let insertedRows = 0;
-    const batchSize = 1000;
+    const batchSize = 250; // Reduced from 1000 for large CSVs with many columns
     let currentBatch: TelemetryRow[] = [];
     let batchesSinceUpdate = 0;
     const fieldsWithData = new Set<string>();
@@ -233,8 +233,9 @@ self.onmessage = async (e: MessageEvent<ProcessMessage>) => {
               .insert(currentBatch);
 
             if (insertError) {
-              console.error('Insert error:', insertError);
-              throw insertError;
+              console.error('Insert error at row', processedRows, ':', insertError);
+              console.error('Error details:', JSON.stringify(insertError, null, 2));
+              throw new Error(`Database insert failed: ${insertError.message || JSON.stringify(insertError)}`);
             }
 
             insertedRows += currentBatch.length;
