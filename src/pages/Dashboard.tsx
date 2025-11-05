@@ -485,29 +485,33 @@ const Dashboard = () => {
 
         toast({
           title: "Processing Started",
-          description: "File uploaded. Converting to Parquet format...",
+          description: "Extracting metadata from file...",
         });
 
-        // Call edge function to convert CSV to Parquet
-        const { data: conversionResult, error: conversionError } = await supabase.functions.invoke(
-          'csv-to-parquet',
-          {
-            body: {
-              fileId: fileRecord.id,
-              sessionId: sessionId,
-            }
-          }
-        );
+        // Extract just the metadata (headers and units) without processing the entire file
+        const availableMetrics = await extractCsvMetadata(file);
 
-        if (conversionError) {
-          throw new Error(`Conversion failed: ${conversionError.message}`);
+        // Update session with available metrics
+        const { error: sessionError } = await supabase
+          .from('sessions')
+          .update({ 
+            available_metrics: availableMetrics,
+          })
+          .eq('id', sessionId);
+
+        if (sessionError) {
+          console.error('Error updating session:', sessionError);
         }
 
-        console.log('Conversion completed:', conversionResult);
-        
+        // Mark file as processed - we don't need to process the whole file
+        await supabase
+          .from('uploaded_files')
+          .update({ upload_status: 'processed' })
+          .eq('id', fileRecord.id);
+
         toast({
-          title: "Processing Complete!",
-          description: `File processed successfully! ${conversionResult.rowCount} rows, ${conversionResult.columnCount} columns`,
+          title: "Upload Complete!",
+          description: `File uploaded successfully! ${availableMetrics.length} metrics detected.`,
         });
 
         fetchSessions();

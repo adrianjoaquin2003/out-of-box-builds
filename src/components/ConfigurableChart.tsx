@@ -58,10 +58,10 @@ export function ConfigurableChart({
       setLoading(true);
       console.log(`[${metricLabel}] Fetching data for metric: ${metric}, session: ${sessionId}`);
       
-      // Get session to find Parquet file
+      // Get session to find CSV file
       const { data: session, error: sessionError } = await supabase
         .from('sessions')
-        .select('parquet_file_path')
+        .select('*')
         .eq('id', sessionId)
         .maybeSingle();
 
@@ -71,8 +71,16 @@ export function ConfigurableChart({
         return;
       }
 
-      if (!session?.parquet_file_path) {
-        console.log('No Parquet file, falling back to database');
+      // Get the uploaded file path
+      const { data: files, error: filesError } = await supabase
+        .from('uploaded_files')
+        .select('file_path')
+        .eq('session_id', sessionId)
+        .eq('upload_status', 'processed')
+        .limit(1);
+
+      if (filesError || !files || files.length === 0) {
+        console.log('No processed files, falling back to database');
         // Fallback for old data
         const firstBatch = supabase.rpc('sample_telemetry_data', {
           p_session_id: sessionId,
@@ -119,17 +127,17 @@ export function ConfigurableChart({
         return;
       }
 
-      // Read from Parquet file
-      console.log(`[${metricLabel}] Reading from Parquet:`, session.parquet_file_path);
-      const { queryParquetMetric } = await import('@/lib/parquetReader');
-      const parquetData = await queryParquetMetric(session.parquet_file_path, metric, 2000);
+      // Read directly from CSV file
+      console.log(`[${metricLabel}] Reading from CSV:`, files[0].file_path);
+      const { queryCsvMetric } = await import('@/lib/csvReader');
+      const csvData = await queryCsvMetric(files[0].file_path, metric, 2000);
 
-      console.log(`[${metricLabel}] Got ${parquetData.length} points from Parquet`);
+      console.log(`[${metricLabel}] Got ${csvData.length} points from CSV`);
 
-      setData(parquetData);
+      setData(csvData);
 
-      if (parquetData.length > 0) {
-        const values = parquetData.map(d => d.value);
+      if (csvData.length > 0) {
+        const values = csvData.map(d => d.value);
         setStats({
           min: Math.min(...values),
           max: Math.max(...values),
