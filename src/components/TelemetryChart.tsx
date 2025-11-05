@@ -36,8 +36,8 @@ export const TelemetryChart = ({ sessionId }: TelemetryChartProps) => {
       if (telemetry && telemetry.length > 0) {
         setData(telemetry);
         
-        // Calculate statistics - use ground_speed or gps_speed
-        const speeds = telemetry.map(t => t.ground_speed || t.gps_speed || 0).filter(s => s > 0);
+        // Calculate statistics
+        const speeds = telemetry.map(t => t.speed || 0).filter(s => s > 0);
         const rpms = telemetry.map(t => t.engine_speed || 0).filter(r => r > 0);
         const laps = new Set(telemetry.map(t => t.lap_number).filter(l => l !== null));
         
@@ -130,7 +130,7 @@ export const TelemetryChart = ({ sessionId }: TelemetryChartProps) => {
                 <Legend />
                 <Line 
                   type="monotone" 
-                  dataKey="ground_speed" 
+                  dataKey="speed" 
                   name="Speed"
                   stroke="hsl(var(--primary))" 
                   dot={false}
@@ -181,7 +181,7 @@ export const TelemetryChart = ({ sessionId }: TelemetryChartProps) => {
       )}
 
       {/* Throttle & G-Force Chart */}
-      {(data.some(d => d.throttle_position) || data.some(d => d.g_force_lat)) && (
+      {(data.some(d => d.throttle_position) || data.some(d => (d.metrics as any)?.g_force_lat)) && (
         <Card>
           <CardHeader>
             <CardTitle>Throttle & G-Forces</CardTitle>
@@ -213,10 +213,10 @@ export const TelemetryChart = ({ sessionId }: TelemetryChartProps) => {
                       strokeWidth={2}
                     />
                   )}
-                  {data.some(d => d.g_force_lat) && (
+                  {data.some(d => (d.metrics as any)?.g_force_lat) && (
                     <Line 
                       type="monotone" 
-                      dataKey="g_force_lat" 
+                      dataKey={(d: any) => d.metrics?.g_force_lat}
                       name="Lateral G" 
                       stroke="hsl(var(--chart-4))" 
                       dot={false}

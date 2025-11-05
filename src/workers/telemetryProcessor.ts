@@ -7,7 +7,16 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 interface TelemetryRow {
   session_id: string;
   file_id: string;
-  [key: string]: any;
+  time?: number;
+  lap_number?: number;
+  lap_time?: number;
+  speed?: number;
+  engine_speed?: number;
+  throttle_position?: number;
+  gps_latitude?: number;
+  gps_longitude?: number;
+  gps_altitude?: number;
+  metrics: Record<string, any>;
 }
 
 interface ProcessMessage {
@@ -19,27 +28,19 @@ interface ProcessMessage {
 }
 
 // Column mapping from CSV headers to database columns
+// NOTE: All speed columns map to 'speed' in the new schema
 const baseColumnMap: Record<string, string> = {
   'Time': 'time',
   'Lap Number': 'lap_number',
   'Lap Time': 'lap_time',
-  'Lap Distance': 'lap_distance',
-  'G Force Lat': 'g_force_lat',
-  'G Force Long': 'g_force_long',
-  'G Force Vert': 'g_force_vert',
-  'Ground Speed': 'ground_speed',
-  'GPS Speed': 'gps_speed',
-  'Drive Speed': 'drive_speed',
+  'Ground Speed': 'speed',
+  'GPS Speed': 'speed',
+  'Drive Speed': 'speed',
   'Engine Speed': 'engine_speed',
-  'Engine Oil Pressure': 'engine_oil_pressure',
-  'Engine Oil Temperature': 'engine_oil_temperature',
-  'Coolant Temperature': 'coolant_temperature',
   'Throttle Position': 'throttle_position',
-  'Throttle Pedal': 'throttle_pedal',
-  'Boost Pressure': 'boost_pressure',
-  'Gear': 'gear',
-  'Bat Volts ECU': 'bat_volts_ecu',
-  'Bat Volts Dash': 'bat_volts_dash',
+  'GPS Latitude': 'gps_latitude',
+  'GPS Longitude': 'gps_longitude',
+  'GPS Altitude': 'gps_altitude',
 };
 
 const sanitizeColumnName = (name: string): string => {
@@ -51,12 +52,15 @@ const sanitizeColumnName = (name: string): string => {
 };
 
 const metricsMap: Record<string, { label: string; unit: string; category: string }> = {
-  ground_speed: { label: 'Speed', unit: 'km/h', category: 'Performance' },
-  gps_speed: { label: 'GPS Speed', unit: 'km/h', category: 'Performance' },
-  drive_speed: { label: 'Drive Speed', unit: 'km/h', category: 'Performance' },
+  speed: { label: 'Speed', unit: 'km/h', category: 'Performance' },
   engine_speed: { label: 'Engine RPM', unit: 'RPM', category: 'Engine' },
   throttle_position: { label: 'Throttle Position', unit: '%', category: 'Driver Input' },
   throttle_pedal: { label: 'Throttle Pedal', unit: '%', category: 'Driver Input' },
+  lap_number: { label: 'Lap Number', unit: '', category: 'Lap Data' },
+  lap_time: { label: 'Lap Time', unit: 's', category: 'Lap Data' },
+  gps_latitude: { label: 'GPS Latitude', unit: '°', category: 'GPS' },
+  gps_longitude: { label: 'GPS Longitude', unit: '°', category: 'GPS' },
+  gps_altitude: { label: 'GPS Altitude', unit: 'm', category: 'GPS' },
   g_force_lat: { label: 'Lateral G-Force', unit: 'G', category: 'Forces' },
   g_force_long: { label: 'Longitudinal G-Force', unit: 'G', category: 'Forces' },
   g_force_vert: { label: 'Vertical G-Force', unit: 'G', category: 'Forces' },
@@ -170,8 +174,12 @@ self.onmessage = async (e: MessageEvent<ProcessMessage>) => {
         
         const row: TelemetryRow = {
           session_id: sessionId,
-          file_id: fileId
+          file_id: fileId,
+          metrics: {}
         };
+
+        // Core metrics that get dedicated columns
+        const coreMetrics = new Set(['time', 'lap_number', 'lap_time', 'speed', 'engine_speed', 'throttle_position', 'gps_latitude', 'gps_longitude', 'gps_altitude']);
 
         // Map columns
         for (let j = 0; j < headers.length; j++) {
@@ -184,35 +192,33 @@ self.onmessage = async (e: MessageEvent<ProcessMessage>) => {
             continue;
           }
 
-          // Handle string fields  
-          if (dbColumn === 'gps_time' || dbColumn === 'gps_date') {
-            row[dbColumn] = value;
-            continue;
-          }
-
           // Parse numeric values
           const numValue = parseFloat(value);
           
           if (!isNaN(numValue)) {
-            // Convert speed units
+            // Convert speed units to km/h
             let convertedValue = numValue;
-            if ((dbColumn === 'ground_speed' || dbColumn === 'gps_speed' || dbColumn === 'drive_speed')) {
+            if (dbColumn === 'speed') {
               if (unit.toLowerCase() === 'm/s') {
                 convertedValue = numValue * 3.6;
               } else if (unit.toLowerCase() === 'mph') {
                 convertedValue = numValue * 1.60934;
               }
             }
-            row[dbColumn] = convertedValue;
+            
+            // Route to core column or JSONB metrics
+            if (coreMetrics.has(dbColumn)) {
+              row[dbColumn] = convertedValue;
+            } else {
+              row.metrics[dbColumn] = convertedValue;
+            }
           }
         }
 
         // Track fields with data (first 100 rows only)
         if (processedRows < 100) {
-          Object.keys(row).forEach(key => {
-            if (key !== 'session_id' && key !== 'file_id') {
-              fieldsWithData.add(key);
-            }
+          Object.keys(row.metrics).forEach(key => {
+            fieldsWithData.add(key);
           });
         }
 

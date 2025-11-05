@@ -11,48 +11,13 @@ interface TelemetryRow {
   time?: number;
   lap_number?: number;
   lap_time?: number;
-  lap_distance?: number;
-  lap_gain_loss_running?: number;
-  running_lap_time?: number;
-  lap_time_predicted?: number;
-  reference_lap_time?: number;
-  trip_distance?: number;
-  g_force_lat?: number;
-  g_force_long?: number;
-  g_force_vert?: number;
-  ground_speed?: number;
-  gps_speed?: number;
-  drive_speed?: number;
+  speed?: number;
+  engine_speed?: number;
+  throttle_position?: number;
   gps_latitude?: number;
   gps_longitude?: number;
   gps_altitude?: number;
-  gps_heading?: number;
-  gps_sats_used?: number;
-  gps_time?: string;
-  gps_date?: string;
-  engine_speed?: number;
-  engine_oil_pressure?: number;
-  engine_oil_temperature?: number;
-  coolant_temperature?: number;
-  ignition_timing?: number;
-  fuel_pressure_sensor?: number;
-  fuel_temperature?: number;
-  fuel_used_m1?: number;
-  fuel_inj_primary_duty_cycle?: number;
-  inlet_manifold_pressure?: number;
-  inlet_air_temperature?: number;
-  boost_pressure?: number;
-  airbox_temperature?: number;
-  throttle_position?: number;
-  throttle_pedal?: number;
-  gear?: number;
-  gear_detect_value?: number;
-  bat_volts_ecu?: number;
-  bat_volts_dash?: number;
-  cpu_usage?: number;
-  device_up_time?: number;
-  comms_rs232_2_diag?: number;
-  dash_temp?: number;
+  metrics: Record<string, any>;
 }
 
 Deno.serve(async (req) => {
@@ -186,52 +151,19 @@ async function processData(supabase: any, fileId: string, sessionId: string) {
     };
 
     // Create mapping from CSV headers to database columns
+    // NOTE: All speed columns map to 'speed' in new hybrid schema
     const baseColumnMap: Record<string, string> = {
       'Time': 'time',
       'Lap Number': 'lap_number',
       'Lap Time': 'lap_time',
-      'Lap Distance': 'lap_distance',
-      'Lap Gain/Loss Running': 'lap_gain_loss_running',
-      'Running Lap Time': 'running_lap_time',
-      'Lap Time Predicted': 'lap_time_predicted',
-      'Reference Lap Time': 'reference_lap_time',
-      'Trip Distance': 'trip_distance',
-      'G Force Lat': 'g_force_lat',
-      'G Force Long': 'g_force_long',
-      'G Force Vert': 'g_force_vert',
-      'Ground Speed': 'ground_speed',
-      'GPS Speed': 'gps_speed',
-      'Drive Speed': 'drive_speed',
+      'Ground Speed': 'speed',
+      'GPS Speed': 'speed',
+      'Drive Speed': 'speed',
+      'Engine Speed': 'engine_speed',
+      'Throttle Position': 'throttle_position',
       'GPS Latitude': 'gps_latitude',
       'GPS Longitude': 'gps_longitude',
       'GPS Altitude': 'gps_altitude',
-      'GPS Heading': 'gps_heading',
-      'GPS Sats Used': 'gps_sats_used',
-      'GPS Time': 'gps_time',
-      'GPS Date': 'gps_date',
-      'Engine Speed': 'engine_speed',
-      'Engine Oil Pressure': 'engine_oil_pressure',
-      'Engine Oil Temperature': 'engine_oil_temperature',
-      'Coolant Temperature': 'coolant_temperature',
-      'Ignition Timing': 'ignition_timing',
-      'Fuel Pressure Sensor': 'fuel_pressure_sensor',
-      'Fuel Temperature': 'fuel_temperature',
-      'Fuel Used M1': 'fuel_used_m1',
-      'Fuel Inj Primary Duty Cycle': 'fuel_inj_primary_duty_cycle',
-      'Inlet Manifold Pressure': 'inlet_manifold_pressure',
-      'Inlet Air Temperature': 'inlet_air_temperature',
-      'Boost Pressure': 'boost_pressure',
-      'Airbox Temperature': 'airbox_temperature',
-      'Throttle Position': 'throttle_position',
-      'Throttle Pedal': 'throttle_pedal',
-      'Gear': 'gear',
-      'Gear Detect Value': 'gear_detect_value',
-      'Bat Volts ECU': 'bat_volts_ecu',
-      'Bat Volts Dash': 'bat_volts_dash',
-      'CPU Usage': 'cpu_usage',
-      'Device Up Time': 'device_up_time',
-      'Comms RS232-2 Diag': 'comms_rs232_2_diag',
-      'Dash Temp': 'dash_temp'
     };
 
     // Build complete column map including unmapped columns
@@ -300,8 +232,12 @@ async function processData(supabase: any, fileId: string, sessionId: string) {
       const values = line.split(',').map(v => v.trim());
       const row: TelemetryRow = {
         session_id: sessionId,
-        file_id: fileId
+        file_id: fileId,
+        metrics: {}
       };
+
+      // Core metrics that get dedicated columns
+      const coreMetrics = new Set(['time', 'lap_number', 'lap_time', 'speed', 'engine_speed', 'throttle_position', 'gps_latitude', 'gps_longitude', 'gps_altitude']);
 
       // Map each column to database field
       for (let j = 0; j < headers.length; j++) {
@@ -312,22 +248,23 @@ async function processData(supabase: any, fileId: string, sessionId: string) {
         if (dbColumn && values[j] !== undefined && values[j] !== '') {
           const value = values[j];
           
-          // Handle string fields
-          if (dbColumn === 'gps_time' || dbColumn === 'gps_date') {
-            row[dbColumn] = value;
-          } else {
-            // Parse numeric values
-            let numValue = parseFloat(value);
-            if (!isNaN(numValue)) {
-              // Convert speed units to km/h
-              if ((dbColumn === 'ground_speed' || dbColumn === 'gps_speed' || dbColumn === 'drive_speed')) {
-                if (unit.toLowerCase() === 'm/s') {
-                  numValue = numValue * 3.6;
-                } else if (unit.toLowerCase() === 'mph') {
-                  numValue = numValue * 1.60934;
-                }
+          // Parse numeric values
+          let numValue = parseFloat(value);
+          if (!isNaN(numValue)) {
+            // Convert speed units to km/h
+            if (dbColumn === 'speed') {
+              if (unit.toLowerCase() === 'm/s') {
+                numValue = numValue * 3.6;
+              } else if (unit.toLowerCase() === 'mph') {
+                numValue = numValue * 1.60934;
               }
+            }
+            
+            // Route to core column or JSONB metrics
+            if (coreMetrics.has(dbColumn)) {
               row[dbColumn] = numValue;
+            } else {
+              row.metrics[dbColumn] = numValue;
             }
           }
         }
@@ -335,8 +272,8 @@ async function processData(supabase: any, fileId: string, sessionId: string) {
 
       // Track fields with data (for first 100 rows)
       if (processedRows < 100) {
-        Object.keys(row).forEach(key => {
-          if (key !== 'session_id' && key !== 'file_id' && row[key] !== null && row[key] !== undefined) {
+        Object.keys(row.metrics).forEach(key => {
+          if (row.metrics[key] !== null && row.metrics[key] !== undefined) {
             fieldsWithData.add(key);
           }
         });
@@ -403,12 +340,15 @@ async function processData(supabase: any, fileId: string, sessionId: string) {
     // Detect available metrics by checking which fields have non-null data
     const availableMetrics: Array<{ key: string; label: string; unit: string; category: string }> = [];
     const metricsMap: Record<string, { label: string; unit: string; category: string }> = {
-      ground_speed: { label: 'Speed', unit: 'km/h', category: 'Performance' },
-      gps_speed: { label: 'GPS Speed', unit: 'km/h', category: 'Performance' },
-      drive_speed: { label: 'Drive Speed', unit: 'km/h', category: 'Performance' },
+      speed: { label: 'Speed', unit: 'km/h', category: 'Performance' },
       engine_speed: { label: 'Engine RPM', unit: 'RPM', category: 'Engine' },
       throttle_position: { label: 'Throttle Position', unit: '%', category: 'Driver Input' },
       throttle_pedal: { label: 'Throttle Pedal', unit: '%', category: 'Driver Input' },
+      lap_number: { label: 'Lap Number', unit: '', category: 'Lap Data' },
+      lap_time: { label: 'Lap Time', unit: 's', category: 'Lap Data' },
+      gps_latitude: { label: 'GPS Latitude', unit: '°', category: 'GPS' },
+      gps_longitude: { label: 'GPS Longitude', unit: '°', category: 'GPS' },
+      gps_altitude: { label: 'GPS Altitude', unit: 'm', category: 'GPS' },
       g_force_lat: { label: 'Lateral G-Force', unit: 'G', category: 'Forces' },
       g_force_long: { label: 'Longitudinal G-Force', unit: 'G', category: 'Forces' },
       g_force_vert: { label: 'Vertical G-Force', unit: 'G', category: 'Forces' },
@@ -427,14 +367,9 @@ async function processData(supabase: any, fileId: string, sessionId: string) {
       gear_detect_value: { label: 'Gear Detect', unit: '', category: 'Transmission' },
       bat_volts_ecu: { label: 'Battery ECU', unit: 'V', category: 'Electrical' },
       bat_volts_dash: { label: 'Battery Dash', unit: 'V', category: 'Electrical' },
-      lap_number: { label: 'Lap Number', unit: '', category: 'Lap Data' },
-      lap_time: { label: 'Lap Time', unit: 's', category: 'Lap Data' },
       lap_distance: { label: 'Lap Distance', unit: 'm', category: 'Lap Data' },
       running_lap_time: { label: 'Running Lap Time', unit: 's', category: 'Lap Data' },
       trip_distance: { label: 'Trip Distance', unit: 'm', category: 'GPS' },
-      gps_latitude: { label: 'GPS Latitude', unit: '°', category: 'GPS' },
-      gps_longitude: { label: 'GPS Longitude', unit: '°', category: 'GPS' },
-      gps_altitude: { label: 'GPS Altitude', unit: 'm', category: 'GPS' },
       gps_heading: { label: 'GPS Heading', unit: '°', category: 'GPS' },
     };
 
