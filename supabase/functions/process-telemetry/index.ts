@@ -70,17 +70,34 @@ Deno.serve(async (req) => {
 
     await supabase
       .from('uploaded_files')
-      .update({ upload_status: 'processing' })
+      .update({ upload_status: 'processing', processing_progress: 0 })
       .eq('id', fileId);
 
-    EdgeRuntime.waitUntil(processData(supabase, fileId, sessionId));
+    // Process the data directly (no background task)
+    await processData(supabase, fileId, sessionId);
 
     return new Response(
-      JSON.stringify({ message: 'Processing started' }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 202 }
+      JSON.stringify({ message: 'Processing complete' }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );
   } catch (error) {
-    console.error('Error initiating processing:', error);
+    console.error('Error processing:', error);
+    
+    // Update file status to failed
+    try {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const supabase = createClient(supabaseUrl, supabaseKey);
+      const { fileId } = await req.json();
+      
+      await supabase
+        .from('uploaded_files')
+        .update({ upload_status: 'failed' })
+        .eq('id', fileId);
+    } catch (updateError) {
+      console.error('Failed to update error status:', updateError);
+    }
+    
     return new Response(
       JSON.stringify({ error: error.message }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
