@@ -44,6 +44,8 @@ export default function ReportBuilder() {
   const [isSaving, setIsSaving] = useState(false);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [availableMetrics, setAvailableMetrics] = useState<Metric[]>([]);
+  const [timeDomain, setTimeDomain] = useState<[number, number] | undefined>(undefined);
+  const [timeRanges, setTimeRanges] = useState<Map<string, [number, number]>>(new Map());
 
   const categories = ['All', ...Array.from(new Set(availableMetrics.map(m => m.category)))];
 
@@ -223,6 +225,23 @@ export default function ReportBuilder() {
     setCharts(charts.map(c => c.id === chartId ? { ...c, chartType } : c));
   };
 
+  const handleTimeRangeLoaded = (chartId: string, min: number, max: number) => {
+    setTimeRanges(prev => {
+      const updated = new Map(prev);
+      updated.set(chartId, [min, max]);
+      
+      // Calculate global time domain from all loaded ranges
+      if (updated.size > 0) {
+        const allRanges = Array.from(updated.values());
+        const globalMin = Math.min(...allRanges.map(r => r[0]));
+        const globalMax = Math.max(...allRanges.map(r => r[1]));
+        setTimeDomain([globalMin, globalMax]);
+      }
+      
+      return updated;
+    });
+  };
+
   const filteredMetrics = availableMetrics
     .filter(m => selectedCategory === 'All' || m.category === selectedCategory)
     .filter(m => 
@@ -375,6 +394,8 @@ export default function ReportBuilder() {
                       chartType={chart.chartType}
                       onRemove={() => removeChart(chart.id)}
                       onChangeChartType={(type) => updateChartType(chart.id, type)}
+                      timeDomain={timeDomain}
+                      onTimeRangeLoaded={(min, max) => handleTimeRangeLoaded(chart.id, min, max)}
                     />
                   );
                 })}

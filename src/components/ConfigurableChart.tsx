@@ -33,6 +33,8 @@ interface ConfigurableChartProps {
   onRemove: () => void;
   onChangeChartType: (type: 'line' | 'area' | 'bar') => void;
   readOnly?: boolean;
+  timeDomain?: [number, number];
+  onTimeRangeLoaded?: (min: number, max: number) => void;
 }
 
 export function ConfigurableChart({
@@ -44,6 +46,8 @@ export function ConfigurableChart({
   onRemove,
   onChangeChartType,
   readOnly = false,
+  timeDomain,
+  onTimeRangeLoaded,
 }: ConfigurableChartProps) {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -100,15 +104,21 @@ export function ConfigurableChart({
           value: t.row_value,
         }));
         
-        setData(validData);
+      setData(validData);
         
         if (validData.length > 0) {
           const values = validData.map(d => d.value);
+          const times = validData.map(d => d.time);
           setStats({
             min: Math.min(...values),
             max: Math.max(...values),
             avg: values.reduce((a, b) => a + b, 0) / values.length,
           });
+          
+          // Report time range to parent
+          if (onTimeRangeLoaded) {
+            onTimeRangeLoaded(Math.min(...times), Math.max(...times));
+          }
         }
         setLoading(false);
         return;
@@ -126,11 +136,17 @@ export function ConfigurableChart({
 
       if (chartData.length > 0) {
         const values = chartData.map(d => d.value);
+        const times = chartData.map(d => d.time);
         setStats({
           min: Math.min(...values),
           max: Math.max(...values),
           avg: values.reduce((a, b) => a + b, 0) / values.length,
         });
+        
+        // Report time range to parent
+        if (onTimeRangeLoaded) {
+          onTimeRangeLoaded(Math.min(...times), Math.max(...times));
+        }
       }
     } catch (error) {
       console.error(`[${metricLabel}] Error:`, error);
@@ -149,7 +165,7 @@ export function ConfigurableChart({
       dataKey: 'time',
       type: 'number' as const,
       label: { value: 'Time (seconds)', position: 'insideBottom', offset: -5 },
-      domain: [0, 'dataMax'] as [number, string],
+      domain: timeDomain || ([0, 'dataMax'] as [number, string]),
       scale: 'linear' as const,
     };
 
@@ -262,7 +278,7 @@ export function ConfigurableChart({
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <div style={{ minWidth: Math.max(800, data.length * 1.5) + 'px' }}>
+            <div style={{ minWidth: timeDomain ? (timeDomain[1] - timeDomain[0]) * 4 : Math.max(800, data.length * 1.5) + 'px' }}>
               <ResponsiveContainer width="100%" height={300}>
                 {renderChart()}
               </ResponsiveContainer>

@@ -46,6 +46,8 @@ export default function DashboardView() {
   const [loading, setLoading] = useState(true);
   const [addReportDialogOpen, setAddReportDialogOpen] = useState(false);
   const [availableReports, setAvailableReports] = useState<(Report & { sessions: Session })[]>([]);
+  const [timeDomain, setTimeDomain] = useState<[number, number] | undefined>(undefined);
+  const [timeRanges, setTimeRanges] = useState<Map<string, [number, number]>>(new Map());
 
   useEffect(() => {
     if (!user) {
@@ -178,6 +180,23 @@ export default function DashboardView() {
     }
   };
 
+  const handleTimeRangeLoaded = (chartId: string, min: number, max: number) => {
+    setTimeRanges(prev => {
+      const updated = new Map(prev);
+      updated.set(chartId, [min, max]);
+      
+      // Calculate global time domain from all loaded ranges
+      if (updated.size > 0) {
+        const allRanges = Array.from(updated.values());
+        const globalMin = Math.min(...allRanges.map(r => r[0]));
+        const globalMax = Math.max(...allRanges.map(r => r[1]));
+        setTimeDomain([globalMin, globalMax]);
+      }
+      
+      return updated;
+    });
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -292,6 +311,8 @@ export default function DashboardView() {
                             onRemove={() => {}}
                             onChangeChartType={() => {}}
                             readOnly
+                            timeDomain={timeDomain}
+                            onTimeRangeLoaded={(min, max) => handleTimeRangeLoaded(`${dashboardReport.id}-${chart.id}`, min, max)}
                           />
                         );
                       })}
