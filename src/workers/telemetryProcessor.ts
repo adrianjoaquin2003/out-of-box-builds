@@ -56,6 +56,8 @@ self.onmessage = async (e: MessageEvent<ProcessMessage>) => {
   if (type !== 'process') return;
 
   try {
+    console.log('Worker starting with:', { fileId, sessionId });
+    
     // Initialize Supabase client with user's access token
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: {
@@ -66,6 +68,7 @@ self.onmessage = async (e: MessageEvent<ProcessMessage>) => {
     });
 
     self.postMessage({ type: 'status', message: 'Downloading file...' });
+    console.log('Updating file status to processing...');
 
     // Update file status to processing
     await supabase
@@ -341,9 +344,15 @@ self.onmessage = async (e: MessageEvent<ProcessMessage>) => {
 
   } catch (error: any) {
     console.error('Worker error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
     
     // Try to update status to failed
     try {
+      const { fileId, accessToken } = e.data;
       const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
         global: {
           headers: {
