@@ -249,11 +249,16 @@ self.onmessage = async (e: MessageEvent<ProcessMessage>) => {
         currentBatch = [];
         batchesSinceUpdate++;
 
-        // Update progress less frequently (every 3 batches to reduce overhead)
-        if (batchesSinceUpdate >= 3) {
+        // Update progress less frequently (every 2 batches to reduce overhead)
+        if (batchesSinceUpdate >= 2) {
           const progress = Math.floor((processedRows / totalRows) * 95);
           
-          // Update UI only, skip DB update for speed
+          // Update DB for UI polling
+          await supabase
+            .from('uploaded_files')
+            .update({ processing_progress: progress })
+            .eq('id', fileId);
+          
           self.postMessage({
             type: 'progress',
             progress,
