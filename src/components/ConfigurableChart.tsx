@@ -55,6 +55,8 @@ export function ConfigurableChart({
 
   const fetchData = async () => {
     try {
+      console.log(`[${metricLabel}] Fetching data for metric: ${metric}, session: ${sessionId}`);
+      
       // PostgREST has a default 1000 row limit, so we need to make multiple calls
       // and combine the results to get all 2000 samples
       const firstBatch = supabase.rpc('sample_telemetry_data', {
@@ -70,6 +72,9 @@ export function ConfigurableChart({
       }).range(1000, 1999);
 
       const [result1, result2] = await Promise.all([firstBatch, secondBatch]);
+      
+      console.log(`[${metricLabel}] First batch result:`, result1.error || `${result1.data?.length || 0} rows`);
+      console.log(`[${metricLabel}] Second batch result:`, result2.error || `${result2.data?.length || 0} rows`);
 
       if (result1.error) throw result1.error;
       if (result2.error) throw result2.error;
