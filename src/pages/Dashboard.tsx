@@ -452,30 +452,40 @@ const Dashboard = () => {
         console.log('Extracted', headers.length, 'columns from CSV');
 
         toast({
-          title: "Uploading File",
-          description: `Compressing and uploading ${file.name}...`,
+          title: "Converting to Parquet",
+          description: "Processing file into columnar format...",
         });
 
-        // Step 2: Compress and upload file
-        const compressedBlob = await compressCsvFile(file);
-        const compressedFileName = file.name + '.deflate';
-        const filePath = `${user?.id}/${sessionId}/${Date.now()}_${compressedFileName}`;
+        // Convert CSV to columnar format (Parquet-like) in browser
+        const { convertCsvToColumnar } = await import('@/lib/parquetConverter');
+        const { buffer, metadata } = await convertCsvToColumnar(file);
+
+        toast({
+          title: "Uploading Parquet File",
+          description: "Uploading processed data...",
+        });
+
+        // Upload the Parquet file
+        const parquetFileName = file.name.replace(/\.(csv|deflate)$/, '') + '.parquet';
+        const parquetPath = `${user?.id}/${sessionId}/${Date.now()}_${parquetFileName}`;
         
-        const { error: uploadError } = await supabase.storage
+        const { error: parquetUploadError } = await supabase.storage
           .from('racing-data')
-          .upload(filePath, compressedBlob);
+          .upload(parquetPath, new Blob([buffer]), {
+            contentType: 'application/octet-stream'
+          });
 
-        if (uploadError) throw uploadError;
+        if (parquetUploadError) throw parquetUploadError;
 
-        // Record file in database with 'pending' status
+        // Record file in database
         const { data: fileRecord, error: dbError } = await supabase
           .from('uploaded_files')
           .insert([{
             session_id: sessionId,
             user_id: user?.id,
-            file_name: compressedFileName,
-            file_path: filePath,
-            file_size: compressedBlob.size,
+            file_name: parquetFileName,
+            file_path: parquetPath,
+            file_size: buffer.byteLength,
             upload_status: 'pending'
           }])
           .select()
@@ -483,27 +493,33 @@ const Dashboard = () => {
 
         if (dbError) throw dbError;
 
-        toast({
-          title: "Processing Started",
-          description: "Extracting metadata from file...",
-        });
+        // Build available metrics
+        const metricsMap: Record<string, { label: string; category: string }> = {
+          'time': { label: 'Time', category: 'Timing' },
+          'ground_speed': { label: 'Speed', category: 'Performance' },
+          'engine_speed': { label: 'Engine RPM', category: 'Engine' },
+          'throttle_position': { label: 'Throttle', category: 'Driver Input' },
+        };
 
-        // Extract just the metadata (headers and units) without processing the entire file
-        const availableMetrics = await extractCsvMetadata(file);
+        const availableMetrics = metadata.headers
+          .filter(h => h !== 'time')
+          .map((h, idx) => ({
+            key: h,
+            label: metricsMap[h]?.label || h,
+            unit: metadata.units[idx] || '',
+            category: metricsMap[h]?.category || 'Other'
+          }));
 
-        // Update session with available metrics
-        const { error: sessionError } = await supabase
+        // Update session with Parquet path and metrics
+        await supabase
           .from('sessions')
           .update({ 
+            parquet_file_path: parquetPath,
             available_metrics: availableMetrics,
           })
           .eq('id', sessionId);
 
-        if (sessionError) {
-          console.error('Error updating session:', sessionError);
-        }
-
-        // Mark file as processed - we don't need to process the whole file
+        // Mark file as processed
         await supabase
           .from('uploaded_files')
           .update({ upload_status: 'processed' })
@@ -511,7 +527,7 @@ const Dashboard = () => {
 
         toast({
           title: "Upload Complete!",
-          description: `File uploaded successfully! ${availableMetrics.length} metrics detected.`,
+          description: `Parquet file created! ${metadata.rowCount} rows, ${metadata.columnCount} columns`,
         });
 
         fetchSessions();

@@ -58,10 +58,10 @@ export function ConfigurableChart({
       setLoading(true);
       console.log(`[${metricLabel}] Fetching data for metric: ${metric}, session: ${sessionId}`);
       
-      // Get session to find CSV file
+      // Get session to find Parquet file
       const { data: session, error: sessionError } = await supabase
         .from('sessions')
-        .select('*')
+        .select('parquet_file_path')
         .eq('id', sessionId)
         .maybeSingle();
 
@@ -71,16 +71,8 @@ export function ConfigurableChart({
         return;
       }
 
-      // Get the uploaded file path
-      const { data: files, error: filesError } = await supabase
-        .from('uploaded_files')
-        .select('file_path')
-        .eq('session_id', sessionId)
-        .eq('upload_status', 'processed')
-        .limit(1);
-
-      if (filesError || !files || files.length === 0) {
-        console.log('No processed files, falling back to database');
+      if (!session?.parquet_file_path) {
+        console.log('No Parquet file, falling back to database');
         // Fallback for old data
         const firstBatch = supabase.rpc('sample_telemetry_data', {
           p_session_id: sessionId,
@@ -127,17 +119,31 @@ export function ConfigurableChart({
         return;
       }
 
-      // Read directly from CSV file
-      console.log(`[${metricLabel}] Reading from CSV:`, files[0].file_path);
-      const { queryCsvMetric } = await import('@/lib/csvReader');
-      const csvData = await queryCsvMetric(files[0].file_path, metric, 2000);
+      // Download and read Parquet file
+      console.log(`[${metricLabel}] Reading from Parquet:`, session.parquet_file_path);
+      
+      const { data: parquetBlob, error: downloadError } = await supabase.storage
+        .from('racing-data')
+        .download(session.parquet_file_path);
 
-      console.log(`[${metricLabel}] Got ${csvData.length} points from CSV`);
+      if (downloadError) {
+        console.error('Download error:', downloadError);
+        setLoading(false);
+        return;
+      }
 
-      setData(csvData);
+      // Convert to ArrayBuffer and read
+      const buffer = await parquetBlob.arrayBuffer();
+      const { readColumnarData, queryMetric } = await import('@/lib/parquetConverter');
+      const parquetData = readColumnarData(buffer);
+      const chartData = queryMetric(parquetData, metric, 2000);
 
-      if (csvData.length > 0) {
-        const values = csvData.map(d => d.value);
+      console.log(`[${metricLabel}] Got ${chartData.length} points from Parquet`);
+
+      setData(chartData);
+
+      if (chartData.length > 0) {
+        const values = chartData.map(d => d.value);
         setStats({
           min: Math.min(...values),
           max: Math.max(...values),
