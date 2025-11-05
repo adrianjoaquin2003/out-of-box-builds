@@ -122,7 +122,7 @@ self.onmessage = async (e: MessageEvent<ProcessMessage>) => {
 
     let processedRows = 0;
     let insertedRows = 0;
-    const batchSize = 1000; // Increased from 100 for faster processing
+    const batchSize = 5000; // Larger batches = fewer API calls = much faster
     let currentBatch: TelemetryRow[] = [];
     let batchesSinceUpdate = 0;
 
@@ -150,13 +150,13 @@ self.onmessage = async (e: MessageEvent<ProcessMessage>) => {
     for (const line of dataLines) {
       if (!line.trim()) continue;
 
+      // Faster parsing - split and trim in one pass
       const values = line.split(',').map(v => {
-        let val = v.trim();
-        // Remove surrounding quotes if present
-        if (val.startsWith('"') && val.endsWith('"')) {
-          val = val.slice(1, -1);
-        }
-        return val;
+        const trimmed = v.trim();
+        // Remove quotes if present (check first/last char only)
+        return (trimmed[0] === '"' && trimmed[trimmed.length - 1] === '"') 
+          ? trimmed.slice(1, -1) 
+          : trimmed;
       });
       const row: TelemetryRow = {
         session_id: sessionId,
@@ -249,14 +249,11 @@ self.onmessage = async (e: MessageEvent<ProcessMessage>) => {
         currentBatch = [];
         batchesSinceUpdate++;
 
-        // Update progress less frequently (every 5 batches to reduce overhead)
-        if (batchesSinceUpdate >= 5) {
+        // Update progress less frequently (every 3 batches to reduce overhead)
+        if (batchesSinceUpdate >= 3) {
           const progress = Math.floor((processedRows / totalRows) * 95);
-          await supabase
-            .from('uploaded_files')
-            .update({ processing_progress: progress })
-            .eq('id', fileId);
-
+          
+          // Update UI only, skip DB update for speed
           self.postMessage({
             type: 'progress',
             progress,
