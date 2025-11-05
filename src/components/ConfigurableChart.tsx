@@ -77,8 +77,8 @@ export function ConfigurableChart({
       const currentRange = timeDomain[1] - timeDomain[0];
       const mouseTime = timeDomain[0] + currentRange * mouseTimePercent;
       
-      // Zoom delta: positive = zoom in, negative = zoom out
-      const zoomDelta = -e.deltaY * 0.001;
+      // Zoom delta: positive = zoom in, negative = zoom out (inverted scroll)
+      const zoomDelta = e.deltaY * 0.001;
       
       onZoom(mouseTime, zoomDelta);
     };

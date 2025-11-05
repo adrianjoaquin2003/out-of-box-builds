@@ -256,10 +256,10 @@ export default function ReportBuilder() {
     const [origMin, origMax] = originalTimeDomain;
     const maxRange = origMax - origMin;
     
-    // Calculate new range (limit zoom in to 5% of original, zoom out to 100% of original)
+    // Calculate new range (limit zoom in to 0.1 seconds minimum, zoom out to 100% of original)
     const zoomFactor = Math.exp(-zoomDelta);
     let newRange = currentRange * zoomFactor;
-    newRange = Math.max(maxRange * 0.05, Math.min(maxRange, newRange));
+    newRange = Math.max(0.1, Math.min(maxRange, newRange));
     
     // Calculate new bounds centered on mouse position
     const centerPercent = (center - currentMin) / currentRange;
