@@ -208,7 +208,7 @@ self.onmessage = async (e: MessageEvent<ProcessMessage>) => {
             
             // Route to core column or JSONB metrics
             if (coreMetrics.has(dbColumn)) {
-              row[dbColumn] = convertedValue;
+              (row as any)[dbColumn] = convertedValue;
             } else {
               row.metrics[dbColumn] = convertedValue;
             }
