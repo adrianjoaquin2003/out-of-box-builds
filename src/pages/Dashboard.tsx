@@ -166,6 +166,7 @@ const Dashboard = () => {
   const [selectedSessionForReport, setSelectedSessionForReport] = useState<string | null>(null);
   const [savedReports, setSavedReports] = useState<Array<{ id: string; name: string }>>([]);
   const [fileStatuses, setFileStatuses] = useState<Record<string, FileStatus[]>>({});
+  const [activeWorkers, setActiveWorkers] = useState<Map<string, Worker>>(new Map());
 
   useEffect(() => {
     if (!user) {
@@ -291,6 +292,41 @@ const Dashboard = () => {
       setFileStatuses(grouped);
     } catch (error) {
       console.error('Error fetching file statuses:', error);
+    }
+  };
+
+  const cancelProcessing = async (fileId: string) => {
+    const worker = activeWorkers.get(fileId);
+    
+    if (worker) {
+      worker.terminate();
+      setActiveWorkers(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(fileId);
+        return newMap;
+      });
+    }
+
+    // Update database status to cancelled
+    try {
+      await supabase
+        .from('uploaded_files')
+        .update({ upload_status: 'failed' })
+        .eq('id', fileId);
+
+      toast({
+        title: "Processing Cancelled",
+        description: "File processing has been stopped.",
+      });
+
+      fetchFileStatuses();
+    } catch (error) {
+      console.error('Error cancelling processing:', error);
+      toast({
+        title: "Error",
+        description: "Failed to cancel processing",
+        variant: "destructive",
+      });
     }
   };
 
@@ -497,6 +533,12 @@ const Dashboard = () => {
           } else if (type === 'progress') {
             fetchFileStatuses();
           } else if (type === 'complete') {
+            // Remove worker from active workers
+            setActiveWorkers(prev => {
+              const newMap = new Map(prev);
+              newMap.delete(fileRecord.id);
+              return newMap;
+            });
             worker.terminate();
             toast({
               title: "Processing Complete",
@@ -505,6 +547,12 @@ const Dashboard = () => {
             fetchSessions();
             fetchFileStatuses();
           } else if (type === 'error') {
+            // Remove worker from active workers
+            setActiveWorkers(prev => {
+              const newMap = new Map(prev);
+              newMap.delete(fileRecord.id);
+              return newMap;
+            });
             worker.terminate();
             toast({
               title: "Processing Failed",
@@ -517,6 +565,12 @@ const Dashboard = () => {
 
         worker.onerror = (error) => {
           console.error('Worker error:', error);
+          // Remove worker from active workers
+          setActiveWorkers(prev => {
+            const newMap = new Map(prev);
+            newMap.delete(fileRecord.id);
+            return newMap;
+          });
           worker.terminate();
           toast({
             title: "Processing Failed",
@@ -524,6 +578,9 @@ const Dashboard = () => {
             variant: "destructive",
           });
         };
+
+        // Store worker in active workers map
+        setActiveWorkers(prev => new Map(prev).set(fileRecord.id, worker));
 
         // Get user's access token
         const { data: { session } } = await supabase.auth.getSession();
@@ -864,14 +921,26 @@ const Dashboard = () => {
                           </div>
                           {file.upload_status === 'processing' && (
                             <div className="space-y-1">
-                              <div className="w-full bg-secondary rounded-full h-1.5">
-                                <div 
-                                  className="bg-primary h-1.5 rounded-full transition-all duration-500"
-                                  style={{ width: `${file.processing_progress || 0}%` }}
-                                />
-                              </div>
-                              <div className="text-xs text-muted-foreground text-right">
-                                {file.processing_progress || 0}%
+                              <div className="flex items-center justify-between">
+                                <div className="flex-1 mr-2">
+                                  <div className="w-full bg-secondary rounded-full h-1.5">
+                                    <div 
+                                      className="bg-primary h-1.5 rounded-full transition-all duration-500"
+                                      style={{ width: `${file.processing_progress || 0}%` }}
+                                    />
+                                  </div>
+                                  <div className="text-xs text-muted-foreground text-right mt-0.5">
+                                    {file.processing_progress || 0}%
+                                  </div>
+                                </div>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-6 px-2 text-xs"
+                                  onClick={() => cancelProcessing(file.id)}
+                                >
+                                  Cancel
+                                </Button>
                               </div>
                             </div>
                           )}
