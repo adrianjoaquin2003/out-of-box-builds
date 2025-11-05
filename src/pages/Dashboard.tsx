@@ -452,33 +452,11 @@ const Dashboard = () => {
         console.log('Extracted', headers.length, 'columns from CSV');
 
         toast({
-          title: "Preparing Database",
-          description: "Adding column definitions to database...",
-        });
-
-        // Step 2: Add columns to database
-        const { data: columnResult, error: columnError } = await supabase.functions.invoke('add-telemetry-columns', {
-          body: { columns: headers }
-        });
-
-        if (columnError) {
-          console.error('Column addition error:', columnError);
-          toast({
-            title: "Database Error",
-            description: "Failed to prepare database columns. Please try again.",
-            variant: "destructive",
-          });
-          return;
-        }
-
-        console.log('Column addition result:', columnResult);
-
-        toast({
           title: "Uploading File",
           description: `Compressing and uploading ${file.name}...`,
         });
 
-        // Step 3: Compress and upload file
+        // Step 2: Compress and upload file
         const compressedBlob = await compressCsvFile(file);
         const compressedFileName = file.name + '.deflate';
         const filePath = `${user?.id}/${sessionId}/${Date.now()}_${compressedFileName}`;
