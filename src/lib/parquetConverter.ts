@@ -83,8 +83,12 @@ export async function convertCsvToColumnar(file: File): Promise<{
   const metadataBytes = new TextEncoder().encode(metadataStr);
   const metadataLength = metadataBytes.length;
 
+  // Calculate padding needed for 8-byte alignment
+  const paddingLength = (8 - ((4 + metadataLength) % 8)) % 8;
+  const alignedMetadataSize = 4 + metadataLength + paddingLength;
+
   // Calculate total size
-  let totalSize = 4 + metadataLength; // 4 bytes for metadata length + metadata
+  let totalSize = alignedMetadataSize; // Aligned metadata section
   headers.forEach(() => {
     totalSize += rowCount * 8; // 8 bytes per Float64
   });
@@ -101,7 +105,10 @@ export async function convertCsvToColumnar(file: File): Promise<{
   new Uint8Array(buffer, offset, metadataLength).set(metadataBytes);
   offset += metadataLength;
 
-  // Write column data
+  // Add padding to align to 8 bytes
+  offset += paddingLength;
+
+  // Write column data (now properly aligned)
   headers.forEach((header: string) => {
     new Float64Array(buffer, offset, rowCount).set(columns[header]);
     offset += rowCount * 8;
@@ -126,6 +133,10 @@ export function readColumnarData(buffer: ArrayBuffer): ParquetData {
   const metadataStr = new TextDecoder().decode(metadataBytes);
   const metadata = JSON.parse(metadataStr);
   offset += metadataLength;
+
+  // Skip padding to align to 8 bytes
+  const paddingLength = (8 - ((4 + metadataLength) % 8)) % 8;
+  offset += paddingLength;
 
   // Read columns
   const columns: Record<string, Float64Array> = {};
