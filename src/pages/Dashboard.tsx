@@ -485,127 +485,34 @@ const Dashboard = () => {
 
         toast({
           title: "Processing Started",
-          description: "File uploaded. Processing telemetry data...",
+          description: "File uploaded. Converting to Parquet format...",
         });
 
-        // Step 4: Process file using web worker
-        const workerUrl = new URL('../workers/telemetryProcessor.ts', import.meta.url);
-        workerUrl.searchParams.set('v', Date.now().toString());
-        const worker = new Worker(workerUrl, {
-          type: 'module'
-        });
-
-        worker.onmessage = (e) => {
-          const { type, progress, processed, total, message, insertedRows, error } = e.data;
-
-          if (type === 'debug') {
-            console.log('[Worker Debug]:', message);
-            return;
+        // Call edge function to convert CSV to Parquet
+        const { data: conversionResult, error: conversionError } = await supabase.functions.invoke(
+          'csv-to-parquet',
+          {
+            body: {
+              fileId: fileRecord.id,
+              sessionId: sessionId,
+            }
           }
+        );
 
-          if (type === 'status') {
-            toast({
-              title: "Processing",
-              description: message,
-            });
-          } else if (type === 'progress') {
-            fetchFileStatuses();
-          } else if (type === 'complete') {
-            // Remove worker from active workers
-            setActiveWorkers(prev => {
-              const newMap = new Map(prev);
-              newMap.delete(fileRecord.id);
-              return newMap;
-            });
-            worker.terminate();
-            toast({
-              title: "Processing Complete",
-              description: message,
-            });
-            fetchSessions();
-            fetchFileStatuses();
-          } else if (type === 'error') {
-            // Remove worker from active workers
-            setActiveWorkers(prev => {
-              const newMap = new Map(prev);
-              newMap.delete(fileRecord.id);
-              return newMap;
-            });
-            worker.terminate();
-            toast({
-              title: "Processing Failed",
-              description: error,
-              variant: "destructive",
-            });
-            fetchFileStatuses();
-          }
-        };
+        if (conversionError) {
+          throw new Error(`Conversion failed: ${conversionError.message}`);
+        }
 
-        worker.onerror = (error) => {
-          console.error('Worker error:', error);
-          // Remove worker from active workers
-          setActiveWorkers(prev => {
-            const newMap = new Map(prev);
-            newMap.delete(fileRecord.id);
-            return newMap;
-          });
-          worker.terminate();
-          toast({
-            title: "Processing Failed",
-            description: "An error occurred while processing the file.",
-            variant: "destructive",
-          });
-        };
-
-        // Store worker in active workers map
-        setActiveWorkers(prev => new Map(prev).set(fileRecord.id, worker));
-
-        // Get user's access token
-        const { data: { session } } = await supabase.auth.getSession();
+        console.log('Conversion completed:', conversionResult);
         
-        worker.postMessage({
-          type: 'process',
-          fileId: fileRecord.id,
-          sessionId: sessionId,
-          filePath: filePath,
-          accessToken: session?.access_token || ''
+        toast({
+          title: "Processing Complete!",
+          description: `File processed successfully! ${conversionResult.rowCount} rows, ${conversionResult.columnCount} columns`,
         });
 
-        // Refresh file statuses to show processing
+        fetchSessions();
         fetchFileStatuses();
         
-        // Poll for completion
-        const pollInterval = setInterval(async () => {
-          const { data: fileStatus } = await supabase
-            .from('uploaded_files')
-            .select('upload_status, processing_progress')
-            .eq('id', fileRecord.id)
-            .single();
-
-          if (fileStatus?.upload_status === 'processed') {
-            clearInterval(pollInterval);
-            toast({
-              title: "Processing Complete",
-              description: "Telemetry data has been processed successfully!",
-            });
-            fetchSessions();
-            fetchFileStatuses();
-          } else if (fileStatus?.upload_status === 'failed') {
-            clearInterval(pollInterval);
-            toast({
-              title: "Processing Failed",
-              description: "Failed to process telemetry data. Please check the file format.",
-              variant: "destructive",
-            });
-            fetchFileStatuses();
-          } else {
-            // Update file statuses to reflect progress
-            fetchFileStatuses();
-          }
-        }, 2000); // Poll every 2 seconds for responsive updates
-
-        // Stop polling after 10 minutes
-        setTimeout(() => clearInterval(pollInterval), 600000);
         
       } catch (error: any) {
         console.error('Error uploading file:', error);

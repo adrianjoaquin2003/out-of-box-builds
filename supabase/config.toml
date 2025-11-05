@@ -5,3 +5,6 @@ verify_jwt = true
 
 [functions.clear-telemetry]
 verify_jwt = false
+
+[functions.csv-to-parquet]
+verify_jwt = true

@@ -179,6 +179,7 @@ export type Database = {
           driver_name: string | null
           id: string
           name: string
+          parquet_file_path: string | null
           session_type: string
           team_id: string | null
           track_name: string | null
@@ -194,6 +195,7 @@ export type Database = {
           driver_name?: string | null
           id?: string
           name: string
+          parquet_file_path?: string | null
           session_type: string
           team_id?: string | null
           track_name?: string | null
@@ -209,6 +211,7 @@ export type Database = {
           driver_name?: string | null
           id?: string
           name?: string
+          parquet_file_path?: string | null
           session_type?: string
           team_id?: string | null
           track_name?: string | null
