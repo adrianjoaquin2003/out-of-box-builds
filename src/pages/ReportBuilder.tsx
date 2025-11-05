@@ -39,6 +39,7 @@ export default function ReportBuilder() {
   const [charts, setCharts] = useState<ChartConfig[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [searchQuery, setSearchQuery] = useState<string>('');
   const [reportName, setReportName] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
@@ -222,9 +223,13 @@ export default function ReportBuilder() {
     setCharts(charts.map(c => c.id === chartId ? { ...c, chartType } : c));
   };
 
-  const filteredMetrics = selectedCategory === 'All'
-    ? availableMetrics
-    : availableMetrics.filter(m => m.category === selectedCategory);
+  const filteredMetrics = availableMetrics
+    .filter(m => selectedCategory === 'All' || m.category === selectedCategory)
+    .filter(m => 
+      searchQuery === '' || 
+      m.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      m.key.toLowerCase().includes(searchQuery.toLowerCase())
+    );
 
   if (loading) {
     return (
@@ -268,8 +273,16 @@ export default function ReportBuilder() {
       <div className="flex flex-1 overflow-hidden">
         {/* Left Sidebar - Data Fields */}
         <aside className="w-80 border-r border-border bg-card/30 flex flex-col">
-          <div className="p-4 border-b border-border">
-            <h2 className="font-semibold text-lg mb-3">Available Metrics</h2>
+          <div className="p-4 border-b border-border space-y-3">
+            <h2 className="font-semibold text-lg">Available Metrics</h2>
+            
+            <Input
+              placeholder="Search metrics..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full"
+            />
+            
             <ScrollArea className="h-12">
               <div className="flex gap-2">
                 {categories.map(category => (
@@ -288,7 +301,13 @@ export default function ReportBuilder() {
           
           <ScrollArea className="flex-1">
             <div className="p-4 space-y-2">
-              {filteredMetrics.map(metric => (
+              {filteredMetrics.length === 0 ? (
+                <div className="text-center text-muted-foreground py-8">
+                  <p className="text-sm">No metrics found</p>
+                  <p className="text-xs mt-1">Try a different search or category</p>
+                </div>
+              ) : (
+                filteredMetrics.map(metric => (
                 <Card key={metric.key} className="hover:shadow-md transition-shadow">
                   <CardContent className="p-3">
                     <div className="flex items-center justify-between">
@@ -306,7 +325,8 @@ export default function ReportBuilder() {
                     </div>
                   </CardContent>
                 </Card>
-              ))}
+                ))
+              )}
             </div>
           </ScrollArea>
         </aside>
