@@ -175,6 +175,24 @@ const Dashboard = () => {
     fetchUserData();
   }, [user, navigate]);
 
+  // Continuous polling for processing files
+  useEffect(() => {
+    const pollProcessingFiles = async () => {
+      const hasProcessingFiles = Object.values(fileStatuses).some(files =>
+        files.some(file => file.upload_status === 'processing')
+      );
+
+      if (hasProcessingFiles) {
+        await fetchFileStatuses();
+      }
+    };
+
+    // Poll every 2 seconds if there are processing files
+    const interval = setInterval(pollProcessingFiles, 2000);
+
+    return () => clearInterval(interval);
+  }, [fileStatuses]);
+
   const fetchUserData = async () => {
     try {
       await Promise.all([fetchProfile(), fetchSessions(), fetchFileStatuses()]);
@@ -549,10 +567,10 @@ const Dashboard = () => {
             // Update file statuses to reflect progress
             fetchFileStatuses();
           }
-        }, 5000); // Poll every 5 seconds (reduced from 3 for efficiency)
+        }, 2000); // Poll every 2 seconds for responsive updates
 
-        // Stop polling after 5 minutes
-        setTimeout(() => clearInterval(pollInterval), 300000);
+        // Stop polling after 10 minutes
+        setTimeout(() => clearInterval(pollInterval), 600000);
         
       } catch (error: any) {
         console.error('Error uploading file:', error);

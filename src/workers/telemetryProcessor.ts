@@ -317,14 +317,20 @@ self.onmessage = async (e: MessageEvent<ProcessMessage>) => {
       .update({ available_metrics: availableMetrics })
       .eq('id', sessionId);
 
-    // Mark as complete
-    await supabase
+    // Mark as complete with 100% progress
+    const { error: completeError } = await supabase
       .from('uploaded_files')
       .update({ 
         upload_status: 'processed',
         processing_progress: 100
       })
       .eq('id', fileId);
+
+    if (completeError) {
+      console.error('Error marking file as complete:', completeError);
+    }
+
+    console.log('File marked as complete at 100%');
 
     self.postMessage({
       type: 'complete',
