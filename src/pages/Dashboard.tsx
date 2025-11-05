@@ -452,30 +452,20 @@ const Dashboard = () => {
         console.log('Extracted', headers.length, 'columns from CSV');
 
         toast({
-          title: "Converting to Parquet",
-          description: "Processing file into columnar format...",
+          title: "Uploading File",
+          description: "Compressing and uploading...",
         });
 
-        // Convert CSV to columnar format (Parquet-like) in browser
-        const { convertCsvToColumnar } = await import('@/lib/parquetConverter');
-        const { buffer, metadata } = await convertCsvToColumnar(file);
-
-        toast({
-          title: "Uploading Parquet File",
-          description: "Uploading processed data...",
-        });
-
-        // Upload the Parquet file
-        const parquetFileName = file.name.replace(/\.(csv|deflate)$/, '') + '.parquet';
-        const parquetPath = `${user?.id}/${sessionId}/${Date.now()}_${parquetFileName}`;
+        // Compress and upload original CSV
+        const compressedBlob = await compressCsvFile(file);
+        const compressedFileName = file.name + '.deflate';
+        const filePath = `${user?.id}/${sessionId}/${Date.now()}_${compressedFileName}`;
         
-        const { error: parquetUploadError } = await supabase.storage
+        const { error: uploadError } = await supabase.storage
           .from('racing-data')
-          .upload(parquetPath, new Blob([buffer]), {
-            contentType: 'application/octet-stream'
-          });
+          .upload(filePath, compressedBlob);
 
-        if (parquetUploadError) throw parquetUploadError;
+        if (uploadError) throw uploadError;
 
         // Record file in database
         const { data: fileRecord, error: dbError } = await supabase
@@ -483,9 +473,9 @@ const Dashboard = () => {
           .insert([{
             session_id: sessionId,
             user_id: user?.id,
-            file_name: parquetFileName,
-            file_path: parquetPath,
-            file_size: buffer.byteLength,
+            file_name: compressedFileName,
+            file_path: filePath,
+            file_size: compressedBlob.size,
             upload_status: 'pending'
           }])
           .select()
@@ -493,7 +483,7 @@ const Dashboard = () => {
 
         if (dbError) throw dbError;
 
-        // Build available metrics
+        // Build available metrics from headers
         const metricsMap: Record<string, { label: string; category: string }> = {
           'time': { label: 'Time', category: 'Timing' },
           'ground_speed': { label: 'Speed', category: 'Performance' },
@@ -501,20 +491,26 @@ const Dashboard = () => {
           'throttle_position': { label: 'Throttle', category: 'Driver Input' },
         };
 
-        const availableMetrics = metadata.headers
-          .filter(h => h !== 'time')
-          .map((h, idx) => ({
-            key: h,
-            label: metricsMap[h]?.label || h,
-            unit: metadata.units[idx] || '',
-            category: metricsMap[h]?.category || 'Other'
-          }));
+        const sanitize = (name: string): string => {
+          return name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+        };
 
-        // Update session with Parquet path and metrics
+        const availableMetrics = headers
+          .filter((h, idx) => idx > 0) // Skip time column
+          .map((h, idx) => {
+            const key = sanitize(h.csvHeader);
+            return {
+              key,
+              label: metricsMap[key]?.label || h.csvHeader,
+              unit: h.unit,
+              category: metricsMap[key]?.category || 'Other'
+            };
+          });
+
+        // Update session with CSV path and metrics
         await supabase
           .from('sessions')
           .update({ 
-            parquet_file_path: parquetPath,
             available_metrics: availableMetrics,
           })
           .eq('id', sessionId);
@@ -527,7 +523,7 @@ const Dashboard = () => {
 
         toast({
           title: "Upload Complete!",
-          description: `Parquet file created! ${metadata.rowCount} rows, ${metadata.columnCount} columns`,
+          description: `File uploaded! ${availableMetrics.length} metrics available.`,
         });
 
         fetchSessions();

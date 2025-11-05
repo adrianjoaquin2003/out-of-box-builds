@@ -58,21 +58,16 @@ export function ConfigurableChart({
       setLoading(true);
       console.log(`[${metricLabel}] Fetching data for metric: ${metric}, session: ${sessionId}`);
       
-      // Get session to find Parquet file
-      const { data: session, error: sessionError } = await supabase
-        .from('sessions')
-        .select('parquet_file_path')
-        .eq('id', sessionId)
-        .maybeSingle();
+      // Get uploaded file for this session
+      const { data: files, error: filesError } = await supabase
+        .from('uploaded_files')
+        .select('file_path')
+        .eq('session_id', sessionId)
+        .eq('upload_status', 'processed')
+        .limit(1);
 
-      if (sessionError) {
-        console.error('Error fetching session:', sessionError);
-        setLoading(false);
-        return;
-      }
-
-      if (!session?.parquet_file_path) {
-        console.log('No Parquet file, falling back to database');
+      if (filesError || !files || files.length === 0) {
+        console.log('No CSV file, falling back to database');
         // Fallback for old data
         const firstBatch = supabase.rpc('sample_telemetry_data', {
           p_session_id: sessionId,
@@ -119,26 +114,13 @@ export function ConfigurableChart({
         return;
       }
 
-      // Download and read Parquet file
-      console.log(`[${metricLabel}] Reading from Parquet:`, session.parquet_file_path);
+      // Stream CSV and extract metric
+      console.log(`[${metricLabel}] Streaming from CSV:`, files[0].file_path);
       
-      const { data: parquetBlob, error: downloadError } = await supabase.storage
-        .from('racing-data')
-        .download(session.parquet_file_path);
+      const { streamCsvMetric } = await import('@/lib/csvStreamer');
+      const chartData = await streamCsvMetric(files[0].file_path, metric, 2000);
 
-      if (downloadError) {
-        console.error('Download error:', downloadError);
-        setLoading(false);
-        return;
-      }
-
-      // Convert to ArrayBuffer and read
-      const buffer = await parquetBlob.arrayBuffer();
-      const { readColumnarData, queryMetric } = await import('@/lib/parquetConverter');
-      const parquetData = readColumnarData(buffer);
-      const chartData = queryMetric(parquetData, metric, 2000);
-
-      console.log(`[${metricLabel}] Got ${chartData.length} points from Parquet`);
+      console.log(`[${metricLabel}] Got ${chartData.length} points from CSV stream`);
 
       setData(chartData);
 
