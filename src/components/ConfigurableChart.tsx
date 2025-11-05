@@ -58,43 +58,78 @@ export function ConfigurableChart({
       setLoading(true);
       console.log(`[${metricLabel}] Fetching data for metric: ${metric}, session: ${sessionId}`);
       
-      // Query database directly (now using streaming insert from edge function)
-      const firstBatch = supabase.rpc('sample_telemetry_data', {
-        p_session_id: sessionId,
-        p_metric: metric,
-        p_sample_size: 2000
-      }).range(0, 999);
+      // Get session to find Parquet file
+      const { data: session, error: sessionError } = await supabase
+        .from('sessions')
+        .select('parquet_file_path')
+        .eq('id', sessionId)
+        .maybeSingle();
 
-      const secondBatch = supabase.rpc('sample_telemetry_data', {
-        p_session_id: sessionId,
-        p_metric: metric,
-        p_sample_size: 2000
-      }).range(1000, 1999);
-
-      const [result1, result2] = await Promise.all([firstBatch, secondBatch]);
-      
-      if (result1.error || result2.error) {
-        console.error('Error fetching from database');
+      if (sessionError) {
+        console.error('Error fetching session:', sessionError);
         setLoading(false);
         return;
       }
 
-      const telemetry = [...(result1.data || []), ...(result2.data || [])];
-      
-      if (!telemetry || telemetry.length === 0) {
+      if (!session?.parquet_file_path) {
+        console.log('No Parquet file, falling back to database');
+        // Fallback for old data
+        const firstBatch = supabase.rpc('sample_telemetry_data', {
+          p_session_id: sessionId,
+          p_metric: metric,
+          p_sample_size: 2000
+        }).range(0, 999);
+
+        const secondBatch = supabase.rpc('sample_telemetry_data', {
+          p_session_id: sessionId,
+          p_metric: metric,
+          p_sample_size: 2000
+        }).range(1000, 1999);
+
+        const [result1, result2] = await Promise.all([firstBatch, secondBatch]);
+        
+        if (result1.error || result2.error) {
+          setLoading(false);
+          return;
+        }
+
+        const telemetry = [...(result1.data || []), ...(result2.data || [])];
+        
+        if (!telemetry || telemetry.length === 0) {
+          setLoading(false);
+          return;
+        }
+        
+        const validData = telemetry.map((t: any) => ({
+          time: t.row_time,
+          value: t.row_value,
+        }));
+        
+        setData(validData);
+        
+        if (validData.length > 0) {
+          const values = validData.map(d => d.value);
+          setStats({
+            min: Math.min(...values),
+            max: Math.max(...values),
+            avg: values.reduce((a, b) => a + b, 0) / values.length,
+          });
+        }
         setLoading(false);
         return;
       }
-      
-      const validData = telemetry.map((t: any) => ({
-        time: t.row_time,
-        value: t.row_value,
-      }));
-      
-      setData(validData);
-      
-      if (validData.length > 0) {
-        const values = validData.map(d => d.value);
+
+      // Read from Parquet file
+      console.log(`[${metricLabel}] Reading from Parquet:`, session.parquet_file_path);
+      const { queryParquetMetric } = await import('@/lib/parquetReader');
+      const parquetData = await queryParquetMetric(session.parquet_file_path, metric, 2000);
+
+      console.log(`[${metricLabel}] Got ${parquetData.length} points from Parquet`);
+
+      setData(parquetData);
+
+      if (parquetData.length > 0) {
+        const values = parquetData.map(d => d.value);
         setStats({
           min: Math.min(...values),
           max: Math.max(...values),
@@ -102,7 +137,7 @@ export function ConfigurableChart({
         });
       }
     } catch (error) {
-      console.error(`[${metricLabel}] Error in fetchData:`, error);
+      console.error(`[${metricLabel}] Error:`, error);
     } finally {
       setLoading(false);
     }

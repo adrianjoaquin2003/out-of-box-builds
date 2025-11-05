@@ -10,128 +10,6 @@ interface ConvertRequest {
   sessionId: string;
 }
 
-interface TelemetryRow {
-  session_id: string;
-  file_id: string;
-  time: number;
-  speed?: number;
-  engine_speed?: number;
-  throttle_position?: number;
-  lap_number?: number;
-  lap_time?: number;
-  gps_latitude?: number;
-  gps_longitude?: number;
-  gps_altitude?: number;
-  metrics: Record<string, number>;
-}
-
-// Streaming CSV parser
-async function* parseCSVStream(
-  stream: ReadableStream<Uint8Array>,
-  batchSize: number = 50
-): AsyncGenerator<TelemetryRow[]> {
-  const reader = stream.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-  let headers: string[] = [];
-  let units: string[] = [];
-  let lineNumber = 0;
-  let currentBatch: TelemetryRow[] = [];
-  let sessionId = '';
-  let fileId = '';
-
-  const baseColumnMap: Record<string, string> = {
-    'time': 'time',
-    'ground_speed': 'speed',
-    'gps_speed': 'speed',
-    'drive_speed': 'speed',
-    'engine_speed': 'engine_speed',
-    'throttle_position': 'throttle_position',
-    'throttle_pedal': 'throttle_position',
-    'lap_number': 'lap_number',
-    'lap_time': 'lap_time',
-    'gps_latitude': 'gps_latitude',
-    'gps_longitude': 'gps_longitude',
-    'gps_altitude': 'gps_altitude',
-  };
-
-  const sanitize = (name: string): string => {
-    return name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').substring(0, 63);
-  };
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        
-        lineNumber++;
-        const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
-
-        // Line 15: Headers
-        if (lineNumber === 15) {
-          headers = values;
-          continue;
-        }
-
-        // Line 16: Units
-        if (lineNumber === 16) {
-          units = values;
-          continue;
-        }
-
-        // Data rows start at line 17
-        if (lineNumber < 17) continue;
-
-        // Parse row
-        const row: TelemetryRow = {
-          session_id: sessionId,
-          file_id: fileId,
-          time: 0,
-          metrics: {}
-        };
-
-        headers.forEach((header, idx) => {
-          const sanitized = sanitize(header);
-          const coreColumn = baseColumnMap[sanitized];
-          const value = parseFloat(values[idx]);
-
-          if (isNaN(value)) return;
-
-          if (coreColumn) {
-            (row as any)[coreColumn] = value;
-          } else {
-            row.metrics[sanitized] = value;
-          }
-        });
-
-        currentBatch.push(row);
-
-        if (currentBatch.length >= batchSize) {
-          yield currentBatch;
-          currentBatch = [];
-        }
-      }
-    }
-
-    // Yield remaining rows
-    if (currentBatch.length > 0) {
-      yield currentBatch;
-    }
-
-    // Return metadata
-    return { headers, units };
-  } finally {
-    reader.releaseLock();
-  }
-}
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -145,7 +23,7 @@ Deno.serve(async (req) => {
 
     const { fileId, sessionId } = await req.json() as ConvertRequest;
     
-    console.log('Starting streaming CSV processing for file:', fileId);
+    console.log('Starting CSV to Parquet conversion for file:', fileId);
 
     // Get file info
     const { data: fileRecord, error: fileError } = await supabase
@@ -159,7 +37,7 @@ Deno.serve(async (req) => {
     // Update status to processing
     await supabase
       .from('uploaded_files')
-      .update({ upload_status: 'processing', processing_progress: 0 })
+      .update({ upload_status: 'processing', processing_progress: 10 })
       .eq('id', fileId);
 
     // Download the CSV file from storage
@@ -169,9 +47,11 @@ Deno.serve(async (req) => {
 
     if (downloadError) throw new Error(`Download failed: ${downloadError.message}`);
 
-    console.log('File downloaded, streaming decompression...');
+    console.log('File downloaded, converting to columnar format...');
 
-    // Decompress stream
+    await supabase.from('uploaded_files').update({ processing_progress: 30 }).eq('id', fileId);
+
+    // Decompress stream and read as text
     let dataStream = fileData.stream();
     if (fileRecord.file_path.endsWith('.deflate')) {
       dataStream = dataStream.pipeThrough(new DecompressionStream('deflate'));
@@ -179,62 +59,110 @@ Deno.serve(async (req) => {
       dataStream = dataStream.pipeThrough(new DecompressionStream('gzip'));
     }
 
-    // Process CSV in streaming fashion
-    let totalRows = 0;
-    let headers: string[] = [];
-    let units: string[] = [];
-    const metricsSet = new Set<string>();
+    const csvText = await new Response(dataStream).text();
+    const lines = csvText.split('\n').filter(line => line.trim());
 
-    for await (const batch of parseCSVStream(dataStream, 50)) {
-      // Add session_id and file_id to each row
-      batch.forEach(row => {
-        row.session_id = sessionId;
-        row.file_id = fileId;
-        Object.keys(row.metrics).forEach(k => metricsSet.add(k));
+    console.log(`CSV has ${lines.length} lines`);
+
+    // Parse headers (line 15) and units (line 16)
+    const headers = lines[14]?.split(',').map(h => h.trim().replace(/"/g, '')) || [];
+    const units = lines[15]?.split(',').map(u => u.trim().replace(/"/g, '')) || [];
+
+    console.log(`Found ${headers.length} columns`);
+
+    await supabase.from('uploaded_files').update({ processing_progress: 50 }).eq('id', fileId);
+
+    // Initialize column arrays for columnar storage
+    const columns: Record<string, number[]> = {};
+    headers.forEach(header => {
+      const sanitized = header.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+      columns[sanitized] = [];
+    });
+
+    // Parse data rows (starting from line 17, index 16)
+    for (let i = 16; i < lines.length; i++) {
+      const values = lines[i].split(',');
+      headers.forEach((header, idx) => {
+        const sanitized = header.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+        const value = parseFloat(values[idx]);
+        columns[sanitized].push(isNaN(value) ? 0 : value);
       });
-
-      // Insert batch
-      const { error: insertError } = await supabase
-        .from('telemetry_data')
-        .insert(batch);
-
-      if (insertError) {
-        console.error('Insert error:', insertError);
-        throw new Error(`Database insert failed: ${insertError.message}`);
-      }
-
-      totalRows += batch.length;
-      
-      // Update progress
-      const progress = Math.min(95, Math.floor((totalRows / 232000) * 100));
-      await supabase
-        .from('uploaded_files')
-        .update({ processing_progress: progress })
-        .eq('id', fileId);
-
-      console.log(`Inserted ${totalRows} rows (${progress}%)`);
     }
 
-    console.log(`Processing complete! Total rows: ${totalRows}`);
+    const rowCount = lines.length - 16;
+    console.log(`Parsed ${rowCount} data rows`);
 
-    // Update session with available metrics
-    const metricsMap: Record<string, { label: string; unit: string; category: string }> = {
-      'time': { label: 'Time', unit: 's', category: 'Timing' },
-      'speed': { label: 'Speed', unit: 'km/h', category: 'Performance' },
-      'engine_speed': { label: 'Engine RPM', unit: 'RPM', category: 'Engine' },
-      'throttle_position': { label: 'Throttle', unit: '%', category: 'Driver Input' },
+    await supabase.from('uploaded_files').update({ processing_progress: 70 }).eq('id', fileId);
+
+    // Create columnar format (Parquet-like structure as JSON)
+    const parquetData = {
+      schema: headers.map((h, i) => {
+        const sanitized = h.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+        return { 
+          name: sanitized, 
+          originalName: h,
+          type: 'float64', 
+          unit: units[i] || '' 
+        };
+      }),
+      data: columns,
+      rowCount
     };
 
-    const availableMetrics = Array.from(metricsSet).map(key => ({
-      key,
-      label: metricsMap[key]?.label || key,
-      unit: metricsMap[key]?.unit || '',
-      category: metricsMap[key]?.category || 'Other'
-    }));
+    // Compress and upload
+    const jsonString = JSON.stringify(parquetData);
+    const encoder = new TextEncoder();
+    const jsonBytes = encoder.encode(jsonString);
+    
+    const compressedStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(jsonBytes);
+        controller.close();
+      }
+    }).pipeThrough(new CompressionStream('gzip'));
+
+    const compressedBlob = await new Response(compressedStream).blob();
+    
+    console.log(`Compressed size: ${compressedBlob.size} bytes`);
+
+    await supabase.from('uploaded_files').update({ processing_progress: 85 }).eq('id', fileId);
+
+    // Upload Parquet file to storage
+    const parquetPath = `${fileRecord.file_path.replace(/\.(csv|deflate|gz)$/, '')}.parquet.gz`;
+    const { error: uploadError } = await supabase.storage
+      .from('racing-data')
+      .upload(parquetPath, compressedBlob, {
+        contentType: 'application/octet-stream',
+        upsert: true
+      });
+
+    if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
+
+    console.log('Parquet file uploaded:', parquetPath);
+
+    // Update session with parquet file path and available metrics
+    const metricsMap: Record<string, { label: string; category: string }> = {
+      'time': { label: 'Time', category: 'Timing' },
+      'ground_speed': { label: 'Speed', category: 'Performance' },
+      'engine_speed': { label: 'Engine RPM', category: 'Engine' },
+      'throttle_position': { label: 'Throttle', category: 'Driver Input' },
+    };
+
+    const availableMetrics = parquetData.schema
+      .filter(col => col.name !== 'time')
+      .map(col => ({
+        key: col.name,
+        label: metricsMap[col.name]?.label || col.originalName,
+        unit: col.unit,
+        category: metricsMap[col.name]?.category || 'Other'
+      }));
 
     await supabase
       .from('sessions')
-      .update({ available_metrics: availableMetrics })
+      .update({ 
+        parquet_file_path: parquetPath,
+        available_metrics: availableMetrics
+      })
       .eq('id', sessionId);
 
     // Mark file as processed
@@ -243,11 +171,14 @@ Deno.serve(async (req) => {
       .update({ upload_status: 'processed', processing_progress: 100 })
       .eq('id', fileId);
 
+    console.log('Conversion complete!');
+
     return new Response(
       JSON.stringify({ 
         success: true,
-        rowCount: totalRows,
-        columnCount: metricsSet.size
+        parquetPath,
+        rowCount,
+        columnCount: headers.length
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
@@ -255,18 +186,6 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error('Error in csv-to-parquet:', error);
     
-    // Update file status to failed
-    const { fileId } = await req.json() as ConvertRequest;
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    );
-    
-    await supabase
-      .from('uploaded_files')
-      .update({ upload_status: 'failed' })
-      .eq('id', fileId);
-
     return new Response(
       JSON.stringify({ error: error.message }),
       { 
