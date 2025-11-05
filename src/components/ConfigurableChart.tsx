@@ -147,8 +147,10 @@ export function ConfigurableChart({
 
     const xAxisProps = {
       dataKey: 'time',
+      type: 'number' as const,
       label: { value: 'Time (seconds)', position: 'insideBottom', offset: -5 },
       domain: [0, 'dataMax'] as [number, string],
+      scale: 'linear' as const,
     };
 
     const yAxisProps = {
