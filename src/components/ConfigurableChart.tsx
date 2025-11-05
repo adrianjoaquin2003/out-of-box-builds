@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -35,6 +35,7 @@ interface ConfigurableChartProps {
   readOnly?: boolean;
   timeDomain?: [number, number];
   onTimeRangeLoaded?: (min: number, max: number) => void;
+  onZoom?: (center: number, zoomDelta: number) => void;
 }
 
 export function ConfigurableChart({
@@ -48,14 +49,43 @@ export function ConfigurableChart({
   readOnly = false,
   timeDomain,
   onTimeRangeLoaded,
+  onZoom,
 }: ConfigurableChartProps) {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ min: 0, max: 0, avg: 0 });
+  const chartContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchData();
   }, [sessionId, metric]);
+
+  useEffect(() => {
+    const container = chartContainerRef.current;
+    if (!container || !onZoom) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      if (!timeDomain) return;
+      
+      e.preventDefault();
+      
+      // Calculate the mouse position relative to the time domain
+      const rect = container.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const chartWidth = rect.width;
+      const mouseTimePercent = mouseX / chartWidth;
+      const currentRange = timeDomain[1] - timeDomain[0];
+      const mouseTime = timeDomain[0] + currentRange * mouseTimePercent;
+      
+      // Zoom delta: positive = zoom in, negative = zoom out
+      const zoomDelta = -e.deltaY * 0.001;
+      
+      onZoom(mouseTime, zoomDelta);
+    };
+
+    container.addEventListener('wheel', handleWheel, { passive: false });
+    return () => container.removeEventListener('wheel', handleWheel);
+  }, [onZoom, timeDomain]);
 
   const fetchData = async () => {
     try {
@@ -292,7 +322,11 @@ export function ConfigurableChart({
             No data available for this metric
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div 
+            ref={chartContainerRef}
+            className="overflow-x-auto cursor-zoom-in"
+            style={{ userSelect: 'none' }}
+          >
             <div style={{ minWidth: timeDomain ? (timeDomain[1] - timeDomain[0]) * 4 : Math.max(800, data.length * 1.5) + 'px' }}>
               <ResponsiveContainer width="100%" height={300}>
                 {renderChart()}

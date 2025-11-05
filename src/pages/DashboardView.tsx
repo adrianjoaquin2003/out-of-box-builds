@@ -48,6 +48,7 @@ export default function DashboardView() {
   const [availableReports, setAvailableReports] = useState<(Report & { sessions: Session })[]>([]);
   const [timeDomain, setTimeDomain] = useState<[number, number] | undefined>(undefined);
   const [timeRanges, setTimeRanges] = useState<Map<string, [number, number]>>(new Map());
+  const [originalTimeDomain, setOriginalTimeDomain] = useState<[number, number] | undefined>(undefined);
 
   useEffect(() => {
     if (!user) {
@@ -191,10 +192,46 @@ export default function DashboardView() {
         const globalMin = Math.min(...allRanges.map(r => r[0]));
         const globalMax = Math.max(...allRanges.map(r => r[1]));
         setTimeDomain([globalMin, globalMax]);
+        
+        // Set original domain if not yet set
+        if (!originalTimeDomain) {
+          setOriginalTimeDomain([globalMin, globalMax]);
+        }
       }
       
       return updated;
     });
+  };
+
+  const handleZoom = (center: number, zoomDelta: number) => {
+    if (!timeDomain || !originalTimeDomain) return;
+    
+    const [currentMin, currentMax] = timeDomain;
+    const currentRange = currentMax - currentMin;
+    const [origMin, origMax] = originalTimeDomain;
+    const maxRange = origMax - origMin;
+    
+    // Calculate new range (limit zoom in to 5% of original, zoom out to 100% of original)
+    const zoomFactor = Math.exp(-zoomDelta);
+    let newRange = currentRange * zoomFactor;
+    newRange = Math.max(maxRange * 0.05, Math.min(maxRange, newRange));
+    
+    // Calculate new bounds centered on mouse position
+    const centerPercent = (center - currentMin) / currentRange;
+    let newMin = center - newRange * centerPercent;
+    let newMax = center + newRange * (1 - centerPercent);
+    
+    // Clamp to original bounds
+    if (newMin < origMin) {
+      newMin = origMin;
+      newMax = origMin + newRange;
+    }
+    if (newMax > origMax) {
+      newMax = origMax;
+      newMin = origMax - newRange;
+    }
+    
+    setTimeDomain([newMin, newMax]);
   };
 
   if (loading) {
@@ -313,6 +350,7 @@ export default function DashboardView() {
                             readOnly
                             timeDomain={timeDomain}
                             onTimeRangeLoaded={(min, max) => handleTimeRangeLoaded(`${dashboardReport.id}-${chart.id}`, min, max)}
+                            onZoom={handleZoom}
                           />
                         );
                       })}

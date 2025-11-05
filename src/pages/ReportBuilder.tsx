@@ -46,6 +46,7 @@ export default function ReportBuilder() {
   const [availableMetrics, setAvailableMetrics] = useState<Metric[]>([]);
   const [timeDomain, setTimeDomain] = useState<[number, number] | undefined>(undefined);
   const [timeRanges, setTimeRanges] = useState<Map<string, [number, number]>>(new Map());
+  const [originalTimeDomain, setOriginalTimeDomain] = useState<[number, number] | undefined>(undefined);
 
   const categories = ['All', ...Array.from(new Set(availableMetrics.map(m => m.category)))];
 
@@ -236,10 +237,46 @@ export default function ReportBuilder() {
         const globalMin = Math.min(...allRanges.map(r => r[0]));
         const globalMax = Math.max(...allRanges.map(r => r[1]));
         setTimeDomain([globalMin, globalMax]);
+        
+        // Set original domain if not yet set
+        if (!originalTimeDomain) {
+          setOriginalTimeDomain([globalMin, globalMax]);
+        }
       }
       
       return updated;
     });
+  };
+
+  const handleZoom = (center: number, zoomDelta: number) => {
+    if (!timeDomain || !originalTimeDomain) return;
+    
+    const [currentMin, currentMax] = timeDomain;
+    const currentRange = currentMax - currentMin;
+    const [origMin, origMax] = originalTimeDomain;
+    const maxRange = origMax - origMin;
+    
+    // Calculate new range (limit zoom in to 5% of original, zoom out to 100% of original)
+    const zoomFactor = Math.exp(-zoomDelta);
+    let newRange = currentRange * zoomFactor;
+    newRange = Math.max(maxRange * 0.05, Math.min(maxRange, newRange));
+    
+    // Calculate new bounds centered on mouse position
+    const centerPercent = (center - currentMin) / currentRange;
+    let newMin = center - newRange * centerPercent;
+    let newMax = center + newRange * (1 - centerPercent);
+    
+    // Clamp to original bounds
+    if (newMin < origMin) {
+      newMin = origMin;
+      newMax = origMin + newRange;
+    }
+    if (newMax > origMax) {
+      newMax = origMax;
+      newMin = origMax - newRange;
+    }
+    
+    setTimeDomain([newMin, newMax]);
   };
 
   const filteredMetrics = availableMetrics
@@ -396,6 +433,7 @@ export default function ReportBuilder() {
                       onChangeChartType={(type) => updateChartType(chart.id, type)}
                       timeDomain={timeDomain}
                       onTimeRangeLoaded={(min, max) => handleTimeRangeLoaded(chart.id, min, max)}
+                      onZoom={handleZoom}
                     />
                   );
                 })}
