@@ -235,11 +235,11 @@ self.onmessage = async (e: MessageEvent<ProcessMessage>) => {
             currentBatch = []; // Free memory immediately
             batchesSinceUpdate++;
 
-            // Update progress every 2 batches (show actual progress without assumptions)
+            // Update progress every 2 batches
             if (batchesSinceUpdate >= 2) {
-              // Calculate progress as a smooth curve: slower growth as we approach completion
-              // This gives users feedback without knowing the total row count
-              const progressBase = Math.min(92, Math.floor(Math.log10(insertedRows + 1) * 23));
+              // Linear progress: assume ~50k rows max, cap at 95%
+              // This provides smooth, predictable progress without knowing total row count
+              const progressBase = Math.min(95, Math.floor((insertedRows / 50000) * 95));
               
               await supabase
                 .from('uploaded_files')
