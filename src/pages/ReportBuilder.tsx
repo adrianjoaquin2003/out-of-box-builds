@@ -249,17 +249,27 @@ export default function ReportBuilder() {
   };
 
   const handleZoom = (center: number, zoomDelta: number) => {
-    if (!timeDomain || !originalTimeDomain) return;
+    if (!timeDomain || !originalTimeDomain) {
+      console.log('Cannot zoom: missing domains', { timeDomain, originalTimeDomain });
+      return;
+    }
     
     const [currentMin, currentMax] = timeDomain;
     const currentRange = currentMax - currentMin;
     const [origMin, origMax] = originalTimeDomain;
     const maxRange = origMax - origMin;
     
+    console.log('Before zoom:', { currentRange, maxRange, zoomDelta });
+    
     // Calculate new range (limit zoom in to 0.1 seconds minimum, zoom out to 100% of original)
     const zoomFactor = Math.exp(-zoomDelta);
     let newRange = currentRange * zoomFactor;
+    
+    console.log('Calculated newRange:', newRange, 'zoomFactor:', zoomFactor);
+    
     newRange = Math.max(0.1, Math.min(maxRange, newRange));
+    
+    console.log('After clamp:', newRange);
     
     // Calculate new bounds centered on mouse position
     const centerPercent = (center - currentMin) / currentRange;
@@ -276,6 +286,7 @@ export default function ReportBuilder() {
       newMin = origMax - newRange;
     }
     
+    console.log('Setting new timeDomain:', [newMin, newMax]);
     setTimeDomain([newMin, newMax]);
   };
 

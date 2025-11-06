@@ -65,7 +65,10 @@ export function ConfigurableChart({
     if (!container || !onZoom) return;
 
     const handleWheel = (e: WheelEvent) => {
-      if (!timeDomain) return;
+      if (!timeDomain) {
+        console.log('No timeDomain set yet, skipping zoom');
+        return;
+      }
       
       e.preventDefault();
       
@@ -79,6 +82,8 @@ export function ConfigurableChart({
       
       // Zoom delta: positive = zoom in, negative = zoom out (inverted scroll)
       const zoomDelta = e.deltaY * 0.001;
+      
+      console.log('Zoom event:', { deltaY: e.deltaY, zoomDelta, currentRange, mouseTime });
       
       onZoom(mouseTime, zoomDelta);
     };
