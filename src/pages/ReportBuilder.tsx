@@ -5,15 +5,22 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowLeft, Plus, Loader2, Save } from 'lucide-react';
+import { ArrowLeft, Plus, Loader2, Save, Download } from 'lucide-react';
+import { exportToPDF, exportToCSV } from '@/lib/reportExport';
 import { ConfigurableChart } from '@/components/ConfigurableChart';
 import { toast } from '@/hooks/use-toast';
 
 interface ChartConfig {
   id: string;
-  metric: string;
+  metrics: string[]; // Support multiple metrics
   chartType: 'line' | 'area' | 'bar';
 }
 
@@ -207,8 +214,8 @@ export default function ReportBuilder() {
 
   const addChart = (metric: string) => {
     const newChart: ChartConfig = {
-      id: `${metric}-${Date.now()}`,
-      metric,
+      id: `chart-${Date.now()}`,
+      metrics: [metric],
       chartType: 'line',
     };
     setCharts([...charts, newChart]);
@@ -216,6 +223,31 @@ export default function ReportBuilder() {
       title: 'Chart Added',
       description: `${availableMetrics.find(m => m.key === metric)?.label} chart added to report`,
     });
+  };
+
+  const addMetricToChart = (chartId: string, metric: string) => {
+    setCharts(charts.map(c => {
+      if (c.id === chartId) {
+        if (!c.metrics.includes(metric)) {
+          return { ...c, metrics: [...c.metrics, metric] };
+        }
+      }
+      return c;
+    }));
+    toast({
+      title: 'Metric Added',
+      description: `${availableMetrics.find(m => m.key === metric)?.label} added to chart`,
+    });
+  };
+
+  const removeMetricFromChart = (chartId: string, metric: string) => {
+    setCharts(charts.map(c => {
+      if (c.id === chartId) {
+        const newMetrics = c.metrics.filter(m => m !== metric);
+        return { ...c, metrics: newMetrics };
+      }
+      return c;
+    }).filter(c => c.metrics.length > 0)); // Remove chart if no metrics left
   };
 
   const removeChart = (chartId: string) => {
@@ -329,13 +361,43 @@ export default function ReportBuilder() {
                 </p>
               </div>
             </div>
-            <Button 
-              onClick={() => reportName ? handleSaveReport() : setShowSaveDialog(true)}
-              disabled={isSaving || charts.length === 0}
-            >
-              <Save className="h-4 w-4 mr-2" />
-              {isSaving ? 'Saving...' : reportId ? 'Update Report' : 'Save Report'}
-            </Button>
+            <div className="flex gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" disabled={charts.length === 0}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Export
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuItem onClick={() => exportToPDF(reportName || 'Report', session?.name || 'Session')}>
+                    Export as PDF
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => {
+                    const allMetrics = charts.flatMap(c => 
+                      c.metrics.map(m => {
+                        const metric = availableMetrics.find(am => am.key === m);
+                        return { key: m, label: metric?.label || m };
+                      })
+                    );
+                    // Note: Would need to aggregate all chart data
+                    toast({
+                      title: 'CSV Export',
+                      description: 'CSV export coming soon',
+                    });
+                  }}>
+                    Export as CSV
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button 
+                onClick={() => reportName ? handleSaveReport() : setShowSaveDialog(true)}
+                disabled={isSaving || charts.length === 0}
+              >
+                <Save className="h-4 w-4 mr-2" />
+                {isSaving ? 'Saving...' : reportId ? 'Update Report' : 'Save Report'}
+              </Button>
+            </div>
           </div>
         </div>
       </header>
@@ -434,17 +496,25 @@ export default function ReportBuilder() {
             ) : (
               <div className="space-y-6">
                 {charts.map(chart => {
-                  const metric = availableMetrics.find(m => m.key === chart.metric);
+                  const metricConfigs = chart.metrics.map(m => {
+                    const metric = availableMetrics.find(am => am.key === m);
+                    return {
+                      key: m,
+                      label: metric?.label || m,
+                      unit: metric?.unit || ''
+                    };
+                  });
+                  
                   return (
                     <ConfigurableChart
                       key={chart.id}
                       sessionId={sessionId!}
-                      metric={chart.metric}
-                      metricLabel={metric?.label || chart.metric}
-                      metricUnit={metric?.unit || ''}
+                      metrics={metricConfigs}
                       chartType={chart.chartType}
                       onRemove={() => removeChart(chart.id)}
                       onChangeChartType={(type) => updateChartType(chart.id, type)}
+                      onRemoveMetric={(metric) => {}}
+                      readOnly
                       timeDomain={timeDomain}
                       onTimeRangeLoaded={(min, max) => handleTimeRangeLoaded(chart.id, min, max)}
                       onZoom={handleZoom}

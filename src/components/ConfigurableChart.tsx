@@ -22,57 +22,71 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
-import { ChevronDown, X, Loader2 } from 'lucide-react';
+import { ChevronDown, X, Loader2, Plus, Trash2 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+
+interface MetricConfig {
+  key: string;
+  label: string;
+  unit: string;
+}
 
 interface ConfigurableChartProps {
   sessionId: string;
-  metric: string;
-  metricLabel: string;
-  metricUnit: string;
+  metrics: MetricConfig[];
   chartType: 'line' | 'area' | 'bar';
   onRemove: () => void;
   onChangeChartType: (type: 'line' | 'area' | 'bar') => void;
+  onRemoveMetric: (metricKey: string) => void;
   readOnly?: boolean;
   timeDomain?: [number, number];
   onTimeRangeLoaded?: (min: number, max: number) => void;
   onZoom?: (center: number, zoomDelta: number) => void;
+  availableMetrics?: MetricConfig[];
+  onSelectMetric?: (metricKey: string) => void;
 }
+
+const CHART_COLORS = [
+  'hsl(var(--primary))',
+  'hsl(var(--chart-2))',
+  'hsl(var(--chart-3))',
+  'hsl(var(--chart-4))',
+  'hsl(var(--chart-5))',
+];
 
 export function ConfigurableChart({
   sessionId,
-  metric,
-  metricLabel,
-  metricUnit,
+  metrics,
   chartType,
   onRemove,
   onChangeChartType,
+  onRemoveMetric,
   readOnly = false,
   timeDomain,
   onTimeRangeLoaded,
   onZoom,
+  availableMetrics = [],
+  onSelectMetric,
 }: ConfigurableChartProps) {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({ min: 0, max: 0, avg: 0 });
+  const [stats, setStats] = useState<Map<string, { min: number; max: number; avg: number }>>(new Map());
   const chartContainerRef = useRef<HTMLDivElement>(null);
+  const [showMetricSelector, setShowMetricSelector] = useState(false);
 
   useEffect(() => {
     fetchData();
-  }, [sessionId, metric]);
+  }, [sessionId, JSON.stringify(metrics.map(m => m.key))]);
 
   useEffect(() => {
     const container = chartContainerRef.current;
     if (!container || !onZoom) return;
 
     const handleWheel = (e: WheelEvent) => {
-      if (!timeDomain) {
-        console.log('No timeDomain set yet, skipping zoom');
-        return;
-      }
+      if (!timeDomain) return;
       
       e.preventDefault();
       
-      // Calculate the mouse position relative to the time domain
       const rect = container.getBoundingClientRect();
       const mouseX = e.clientX - rect.left;
       const chartWidth = rect.width;
@@ -80,11 +94,7 @@ export function ConfigurableChart({
       const currentRange = timeDomain[1] - timeDomain[0];
       const mouseTime = timeDomain[0] + currentRange * mouseTimePercent;
       
-      // Zoom delta: positive = zoom in, negative = zoom out (inverted scroll)
       const zoomDelta = e.deltaY * 0.001;
-      
-      console.log('Zoom event:', { deltaY: e.deltaY, zoomDelta, currentRange, mouseTime });
-      
       onZoom(mouseTime, zoomDelta);
     };
 
@@ -95,9 +105,7 @@ export function ConfigurableChart({
   const fetchData = async () => {
     try {
       setLoading(true);
-      console.log(`[${metricLabel}] Fetching data for metric: ${metric}, session: ${sessionId}`);
       
-      // Get uploaded file for this session
       const { data: files, error: filesError } = await supabase
         .from('uploaded_files')
         .select('file_path')
@@ -106,85 +114,109 @@ export function ConfigurableChart({
         .limit(1);
 
       if (filesError || !files || files.length === 0) {
-        console.log('No CSV file, falling back to database');
-        // Fallback for old data
-        const firstBatch = supabase.rpc('sample_telemetry_data', {
-          p_session_id: sessionId,
-          p_metric: metric,
-          p_sample_size: 2000
-        }).range(0, 999);
+        const fetchPromises = metrics.map(async (metric) => {
+          const firstBatch = supabase.rpc('sample_telemetry_data', {
+            p_session_id: sessionId,
+            p_metric: metric.key,
+            p_sample_size: 2000
+          }).range(0, 999);
 
-        const secondBatch = supabase.rpc('sample_telemetry_data', {
-          p_session_id: sessionId,
-          p_metric: metric,
-          p_sample_size: 2000
-        }).range(1000, 1999);
+          const secondBatch = supabase.rpc('sample_telemetry_data', {
+            p_session_id: sessionId,
+            p_metric: metric.key,
+            p_sample_size: 2000
+          }).range(1000, 1999);
 
-        const [result1, result2] = await Promise.all([firstBatch, secondBatch]);
-        
-        if (result1.error || result2.error) {
-          setLoading(false);
-          return;
-        }
+          const [result1, result2] = await Promise.all([firstBatch, secondBatch]);
+          
+          if (result1.error || result2.error) {
+            return { metric: metric.key, data: [] };
+          }
 
-        const telemetry = [...(result1.data || []), ...(result2.data || [])];
+          const telemetry = [...(result1.data || []), ...(result2.data || [])];
+          return { metric: metric.key, data: telemetry };
+        });
+
+        const results = await Promise.all(fetchPromises);
         
-        if (!telemetry || telemetry.length === 0) {
-          setLoading(false);
-          return;
-        }
+        const mergedData = new Map<number, any>();
+        const newStats = new Map<string, { min: number; max: number; avg: number }>();
         
-        const validData = telemetry.map((t: any) => ({
-          time: t.row_time,
-          value: t.row_value,
-        }));
-        
-      setData(validData);
-        
-        if (validData.length > 0) {
-          const values = validData.map(d => d.value);
-          const times = validData.map(d => d.time);
-          setStats({
-            min: Math.min(...values),
-            max: Math.max(...values),
-            avg: values.reduce((a, b) => a + b, 0) / values.length,
+        results.forEach(({ metric, data }) => {
+          const values: number[] = [];
+          data.forEach((t: any) => {
+            const time = t.row_time;
+            if (!mergedData.has(time)) {
+              mergedData.set(time, { time });
+            }
+            mergedData.get(time)![metric] = t.row_value;
+            values.push(t.row_value);
           });
           
-          // Report time range to parent
-          if (onTimeRangeLoaded) {
-            onTimeRangeLoaded(Math.min(...times), Math.max(...times));
+          if (values.length > 0) {
+            newStats.set(metric, {
+              min: Math.min(...values),
+              max: Math.max(...values),
+              avg: values.reduce((a, b) => a + b, 0) / values.length,
+            });
           }
+        });
+        
+        const sortedData = Array.from(mergedData.values()).sort((a, b) => a.time - b.time);
+        setData(sortedData);
+        setStats(newStats);
+        
+        if (sortedData.length > 0 && onTimeRangeLoaded) {
+          const times = sortedData.map(d => d.time);
+          onTimeRangeLoaded(Math.min(...times), Math.max(...times));
         }
+        
         setLoading(false);
         return;
       }
 
-      // Stream CSV and extract metric
-      console.log(`[${metricLabel}] Streaming from CSV:`, files[0].file_path);
-      
       const { streamCsvMetric } = await import('@/lib/csvStreamer');
-      const chartData = await streamCsvMetric(files[0].file_path, metric, 2000);
-
-      console.log(`[${metricLabel}] Got ${chartData.length} points from CSV stream`);
-
-      setData(chartData);
-
-      if (chartData.length > 0) {
-        const values = chartData.map(d => d.value);
-        const times = chartData.map(d => d.time);
-        setStats({
-          min: Math.min(...values),
-          max: Math.max(...values),
-          avg: values.reduce((a, b) => a + b, 0) / values.length,
+      
+      const fetchPromises = metrics.map(metric => 
+        streamCsvMetric(files[0].file_path, metric.key, 2000)
+      );
+      
+      const results = await Promise.all(fetchPromises);
+      
+      const mergedData = new Map<number, any>();
+      const newStats = new Map<string, { min: number; max: number; avg: number }>();
+      
+      metrics.forEach((metric, index) => {
+        const metricData = results[index];
+        const values: number[] = [];
+        
+        metricData.forEach(point => {
+          if (!mergedData.has(point.time)) {
+            mergedData.set(point.time, { time: point.time });
+          }
+          mergedData.get(point.time)![metric.key] = point.value;
+          values.push(point.value);
         });
         
-        // Report time range to parent
-        if (onTimeRangeLoaded) {
-          onTimeRangeLoaded(Math.min(...times), Math.max(...times));
+        if (values.length > 0) {
+          newStats.set(metric.key, {
+            min: Math.min(...values),
+            max: Math.max(...values),
+            avg: values.reduce((a, b) => a + b, 0) / values.length,
+          });
         }
+      });
+
+      const sortedData = Array.from(mergedData.values()).sort((a, b) => a.time - b.time);
+      setData(sortedData);
+      setStats(newStats);
+
+      if (sortedData.length > 0 && onTimeRangeLoaded) {
+        const times = sortedData.map(d => d.time);
+        onTimeRangeLoaded(Math.min(...times), Math.max(...times));
       }
     } catch (error) {
-      console.error(`[${metricLabel}] Error:`, error);
+      console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
     }
@@ -196,7 +228,6 @@ export function ConfigurableChart({
       margin: { top: 5, right: 30, left: 20, bottom: 5 },
     };
 
-    // Calculate synchronized ticks if we have a shared time domain
     const calculateTicks = () => {
       if (!timeDomain) return undefined;
       
@@ -220,7 +251,7 @@ export function ConfigurableChart({
     };
 
     const yAxisProps = {
-      label: { value: `${metricLabel} (${metricUnit})`, angle: -90, position: 'insideLeft' },
+      label: { value: metrics.length === 1 ? `${metrics[0].label} (${metrics[0].unit})` : 'Value', angle: -90, position: 'insideLeft' },
       domain: ['auto', 'auto'] as [string, string],
     };
 
@@ -233,14 +264,17 @@ export function ConfigurableChart({
             <YAxis {...yAxisProps} />
             <Tooltip />
             <Legend />
-            <Area
-              type="monotone"
-              dataKey="value"
-              name={metricLabel}
-              stroke="hsl(var(--primary))"
-              fill="hsl(var(--primary) / 0.2)"
-              strokeWidth={2}
-            />
+            {metrics.map((metric, index) => (
+              <Area
+                key={metric.key}
+                type="monotone"
+                dataKey={metric.key}
+                name={metric.label}
+                stroke={CHART_COLORS[index % CHART_COLORS.length]}
+                fill={`${CHART_COLORS[index % CHART_COLORS.length]} / 0.2`}
+                strokeWidth={2}
+              />
+            ))}
           </AreaChart>
         );
       case 'bar':
@@ -251,7 +285,14 @@ export function ConfigurableChart({
             <YAxis {...yAxisProps} />
             <Tooltip />
             <Legend />
-            <Bar dataKey="value" name={metricLabel} fill="hsl(var(--primary))" />
+            {metrics.map((metric, index) => (
+              <Bar 
+                key={metric.key}
+                dataKey={metric.key} 
+                name={metric.label} 
+                fill={CHART_COLORS[index % CHART_COLORS.length]} 
+              />
+            ))}
           </BarChart>
         );
       default:
@@ -262,34 +303,90 @@ export function ConfigurableChart({
             <YAxis {...yAxisProps} />
             <Tooltip />
             <Legend />
-            <Line
-              type="monotone"
-              dataKey="value"
-              name={metricLabel}
-              stroke="hsl(var(--primary))"
-              dot={false}
-              strokeWidth={2}
-            />
+            {metrics.map((metric, index) => (
+              <Line
+                key={metric.key}
+                type="monotone"
+                dataKey={metric.key}
+                name={metric.label}
+                stroke={CHART_COLORS[index % CHART_COLORS.length]}
+                dot={false}
+                strokeWidth={2}
+              />
+            ))}
           </LineChart>
         );
     }
   };
 
+  const availableToAdd = availableMetrics.filter(
+    m => !metrics.find(existing => existing.key === m.key)
+  );
+
   return (
-    <Card>
+    <Card data-chart-container>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>{metricLabel}</CardTitle>
-            <div className="flex gap-4 mt-2 text-sm text-muted-foreground">
-              <span>Min: {stats.min.toFixed(2)}{metricUnit}</span>
-              <span>Max: {stats.max.toFixed(2)}{metricUnit}</span>
-              <span>Avg: {stats.avg.toFixed(2)}{metricUnit}</span>
+          <div className="flex-1">
+            <CardTitle>
+              {metrics.length === 1 ? metrics[0].label : `Multi-Metric Chart (${metrics.length} metrics)`}
+            </CardTitle>
+            <div className="flex flex-wrap gap-3 mt-2">
+              {metrics.map((metric) => {
+                const metricStats = stats.get(metric.key);
+                return (
+                  <div key={metric.key} className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-xs">
+                      {metric.label}
+                    </Badge>
+                    {metricStats && (
+                      <div className="flex gap-2 text-xs text-muted-foreground">
+                        <span>Min: {metricStats.min.toFixed(2)}{metric.unit}</span>
+                        <span>Max: {metricStats.max.toFixed(2)}{metric.unit}</span>
+                        <span>Avg: {metricStats.avg.toFixed(2)}{metric.unit}</span>
+                      </div>
+                    )}
+                    {!readOnly && metrics.length > 1 && (
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-6 w-6 p-0"
+                        onClick={() => onRemoveMetric(metric.key)}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
           <div className="flex items-center gap-2">
             {!readOnly && (
               <>
+                {availableToAdd.length > 0 && onSelectMetric && (
+                  <DropdownMenu open={showMetricSelector} onOpenChange={setShowMetricSelector}>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm">
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add Metric
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="max-h-64 overflow-y-auto">
+                      {availableToAdd.map(metric => (
+                        <DropdownMenuItem 
+                          key={metric.key}
+                          onClick={() => {
+                            onSelectMetric(metric.key);
+                            setShowMetricSelector(false);
+                          }}
+                        >
+                          {metric.label}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="outline" size="sm">
@@ -324,7 +421,7 @@ export function ConfigurableChart({
           </div>
         ) : data.length === 0 ? (
           <div className="flex items-center justify-center h-[300px] text-muted-foreground">
-            No data available for this metric
+            No data available for these metrics
           </div>
         ) : (
           <div 

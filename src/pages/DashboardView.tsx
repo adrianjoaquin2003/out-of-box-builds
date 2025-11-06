@@ -349,18 +349,20 @@ export default function DashboardView() {
                           { key: 'fuel_pressure_sensor', label: 'Fuel Pressure', unit: 'bar' },
                           { key: 'gear', label: 'Gear', unit: '' },
                         ];
-                        const metric = AVAILABLE_METRICS.find(m => m.key === chart.metric);
+                        const metricConfigs = (chart.metrics || [chart.metric]).map((m: string) => {
+                          const metric = AVAILABLE_METRICS.find(am => am.key === m);
+                          return { key: m, label: metric?.label || m, unit: metric?.unit || '' };
+                        });
                         
                         return (
                           <ConfigurableChart
                             key={chart.id}
                             sessionId={session.id}
-                            metric={chart.metric}
-                            metricLabel={metric?.label || chart.metric}
-                            metricUnit={metric?.unit || ''}
+                            metrics={metricConfigs}
                             chartType={chart.chartType}
                             onRemove={() => {}}
                             onChangeChartType={() => {}}
+                            onRemoveMetric={() => {}}
                             readOnly
                             timeDomain={timeDomain}
                             onTimeRangeLoaded={(min, max) => handleTimeRangeLoaded(`${dashboardReport.id}-${chart.id}`, min, max)}
