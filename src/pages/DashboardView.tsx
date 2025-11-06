@@ -222,13 +222,9 @@ export default function DashboardView() {
     
     console.log('Calculated newRange:', newRange, 'zoomFactor:', zoomFactor);
     
-    // Only prevent zooming in beyond 0.1s - remove the maxRange clamp on zoom in
+    // Only prevent zooming in beyond 0.1s
     if (newRange < 0.1) {
       newRange = 0.1;
-    }
-    // Only apply maxRange clamp when trying to zoom OUT beyond original
-    if (zoomDelta < 0 && newRange > maxRange) {
-      newRange = maxRange;
     }
     
     console.log('After clamp:', newRange);
