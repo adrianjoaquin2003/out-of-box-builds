@@ -261,14 +261,14 @@ export default function ReportBuilder() {
     
     console.log('Before zoom:', { currentRange, maxRange, zoomDelta });
     
-    // Calculate new range (limit zoom in to 0.1 seconds minimum, zoom out to 100% of original)
+    // Calculate new range (limit zoom in to 0.1 seconds minimum)
     const zoomFactor = Math.exp(-zoomDelta);
     let newRange = currentRange * zoomFactor;
     
     console.log('Calculated newRange:', newRange, 'zoomFactor:', zoomFactor);
     
-    // Only clamp the minimum, allow zooming out beyond original
-    newRange = Math.max(0.1, newRange);
+    // Clamp to valid range
+    newRange = Math.max(0.1, Math.min(maxRange, newRange));
     
     console.log('After clamp:', newRange);
     
@@ -277,14 +277,14 @@ export default function ReportBuilder() {
     let newMin = center - newRange * centerPercent;
     let newMax = center + newRange * (1 - centerPercent);
     
-    // Clamp to original bounds
+    // Ensure bounds stay within original data range
     if (newMin < origMin) {
       newMin = origMin;
-      newMax = origMin + newRange;
+      newMax = Math.min(origMax, origMin + newRange);
     }
     if (newMax > origMax) {
       newMax = origMax;
-      newMin = origMax - newRange;
+      newMin = Math.max(origMin, origMax - newRange);
     }
     
     console.log('Setting new timeDomain:', [newMin, newMax]);
