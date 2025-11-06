@@ -7,31 +7,14 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowLeft, Plus, Loader2, Save, Download, Share2, FileSpreadsheet } from 'lucide-react';
+import { ArrowLeft, Plus, Loader2, Save } from 'lucide-react';
 import { ConfigurableChart } from '@/components/ConfigurableChart';
 import { toast } from '@/hooks/use-toast';
-import { exportReportAsPDF, copyShareableLink } from '@/lib/reportExport';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-} from '@/components/ui/dropdown-menu';
 
 interface ChartConfig {
   id: string;
   metric: string;
   chartType: 'line' | 'area' | 'bar';
-  settings?: {
-    yAxisMode: 'auto' | 'custom';
-    yAxisMin?: number;
-    yAxisMax?: number;
-    showMovingAverage: boolean;
-    movingAverageWindow: number;
-    referenceLines: Array<{ value: number; label: string; color: string }>;
-    colors: string[];
-  };
 }
 
 interface Session {
@@ -227,13 +210,6 @@ export default function ReportBuilder() {
       id: `${metric}-${Date.now()}`,
       metric,
       chartType: 'line',
-      settings: {
-        yAxisMode: 'auto',
-        showMovingAverage: false,
-        movingAverageWindow: 10,
-        referenceLines: [],
-        colors: ['hsl(var(--primary))'],
-      },
     };
     setCharts([...charts, newChart]);
     toast({
@@ -248,35 +224,6 @@ export default function ReportBuilder() {
 
   const updateChartType = (chartId: string, chartType: 'line' | 'area' | 'bar') => {
     setCharts(charts.map(c => c.id === chartId ? { ...c, chartType } : c));
-  };
-
-  const updateChartSettings = (chartId: string, settings: ChartConfig['settings']) => {
-    setCharts(charts.map(c => c.id === chartId ? { ...c, settings } : c));
-  };
-
-  const handleExportPDF = async () => {
-    try {
-      await exportReportAsPDF(reportName || 'Report', session?.name || 'Session');
-      toast({
-        title: 'Success',
-        description: 'Report exported as PDF',
-      });
-    } catch (error) {
-      console.error('Error exporting PDF:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to export PDF',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const handleShareLink = () => {
-    copyShareableLink();
-    toast({
-      title: 'Link Copied',
-      description: 'Report link copied to clipboard',
-    });
   };
 
   const handleTimeRangeLoaded = (chartId: string, min: number, max: number) => {
@@ -382,36 +329,13 @@ export default function ReportBuilder() {
                 </p>
               </div>
             </div>
-            <div className="flex gap-2">
-              {reportId && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" disabled={charts.length === 0}>
-                      <Download className="h-4 w-4 mr-2" />
-                      Export
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent>
-                    <DropdownMenuItem onClick={handleExportPDF}>
-                      <FileSpreadsheet className="h-4 w-4 mr-2" />
-                      Export as PDF
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={handleShareLink}>
-                      <Share2 className="h-4 w-4 mr-2" />
-                      Copy Shareable Link
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
-              <Button 
-                onClick={() => reportName ? handleSaveReport() : setShowSaveDialog(true)}
-                disabled={isSaving || charts.length === 0}
-              >
-                <Save className="h-4 w-4 mr-2" />
-                {isSaving ? 'Saving...' : reportId ? 'Update Report' : 'Save Report'}
-              </Button>
-            </div>
+            <Button 
+              onClick={() => reportName ? handleSaveReport() : setShowSaveDialog(true)}
+              disabled={isSaving || charts.length === 0}
+            >
+              <Save className="h-4 w-4 mr-2" />
+              {isSaving ? 'Saving...' : reportId ? 'Update Report' : 'Save Report'}
+            </Button>
           </div>
         </div>
       </header>
@@ -524,8 +448,6 @@ export default function ReportBuilder() {
                       timeDomain={timeDomain}
                       onTimeRangeLoaded={(min, max) => handleTimeRangeLoaded(chart.id, min, max)}
                       onZoom={handleZoom}
-                      settings={chart.settings}
-                      onSettingsChange={(settings) => updateChartSettings(chart.id, settings)}
                     />
                   );
                 })}
