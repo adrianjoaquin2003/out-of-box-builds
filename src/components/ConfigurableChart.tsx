@@ -21,8 +21,20 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
+  ReferenceLine as RechartReferenceLine,
 } from 'recharts';
-import { ChevronDown, X, Loader2 } from 'lucide-react';
+import { ChevronDown, X, Loader2, Settings2, Download } from 'lucide-react';
+import { exportChartDataAsCSV } from '@/lib/reportExport';
+
+export interface ChartSettings {
+  yAxisMode: 'auto' | 'custom';
+  yAxisMin?: number;
+  yAxisMax?: number;
+  showMovingAverage: boolean;
+  movingAverageWindow: number;
+  referenceLines: Array<{ value: number; label: string; color: string }>;
+  colors: string[];
+}
 
 interface ConfigurableChartProps {
   sessionId: string;
@@ -36,6 +48,8 @@ interface ConfigurableChartProps {
   timeDomain?: [number, number];
   onTimeRangeLoaded?: (min: number, max: number) => void;
   onZoom?: (center: number, zoomDelta: number) => void;
+  settings?: ChartSettings;
+  onSettingsChange?: (settings: ChartSettings) => void;
 }
 
 export function ConfigurableChart({
@@ -50,11 +64,21 @@ export function ConfigurableChart({
   timeDomain,
   onTimeRangeLoaded,
   onZoom,
+  settings,
+  onSettingsChange,
 }: ConfigurableChartProps) {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ min: 0, max: 0, avg: 0 });
   const chartContainerRef = useRef<HTMLDivElement>(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [localSettings, setLocalSettings] = useState<ChartSettings>(settings || {
+    yAxisMode: 'auto',
+    showMovingAverage: false,
+    movingAverageWindow: 10,
+    referenceLines: [],
+    colors: ['hsl(var(--primary))'],
+  });
 
   useEffect(() => {
     fetchData();
@@ -91,6 +115,28 @@ export function ConfigurableChart({
     container.addEventListener('wheel', handleWheel, { passive: false });
     return () => container.removeEventListener('wheel', handleWheel);
   }, [onZoom, timeDomain]);
+
+  const calculateMovingAverage = (data: any[], window: number) => {
+    return data.map((point, index) => {
+      const start = Math.max(0, index - Math.floor(window / 2));
+      const end = Math.min(data.length, index + Math.ceil(window / 2));
+      const slice = data.slice(start, end);
+      const avg = slice.reduce((sum, p) => sum + p.value, 0) / slice.length;
+      return { ...point, movingAvg: avg };
+    });
+  };
+
+  const handleExportCSV = () => {
+    const dataToExport = localSettings.showMovingAverage
+      ? calculateMovingAverage(data, localSettings.movingAverageWindow)
+      : data;
+    exportChartDataAsCSV(dataToExport, metricLabel, metricUnit);
+  };
+
+  const handleSettingsSave = (newSettings: ChartSettings) => {
+    setLocalSettings(newSettings);
+    onSettingsChange?.(newSettings);
+  };
 
   const fetchData = async () => {
     try {
@@ -191,8 +237,12 @@ export function ConfigurableChart({
   };
 
   const renderChart = () => {
+    const displayData = localSettings.showMovingAverage
+      ? calculateMovingAverage(data, localSettings.movingAverageWindow)
+      : data;
+
     const commonProps = {
-      data,
+      data: displayData,
       margin: { top: 5, right: 30, left: 20, bottom: 5 },
     };
 
@@ -219,10 +269,28 @@ export function ConfigurableChart({
       ticks: calculateTicks(),
     };
 
+    const yAxisDomain = localSettings.yAxisMode === 'custom'
+      ? [
+          localSettings.yAxisMin ?? 'auto',
+          localSettings.yAxisMax ?? 'auto',
+        ]
+      : (['auto', 'auto'] as [string, string]);
+
     const yAxisProps = {
       label: { value: `${metricLabel} (${metricUnit})`, angle: -90, position: 'insideLeft' },
-      domain: ['auto', 'auto'] as [string, string],
+      domain: yAxisDomain,
     };
+
+    const renderReferenceLines = () =>
+      localSettings.referenceLines.map((line, index) => (
+        <RechartReferenceLine
+          key={index}
+          y={line.value}
+          label={line.label}
+          stroke={line.color}
+          strokeDasharray="3 3"
+        />
+      ));
 
     switch (chartType) {
       case 'area':
@@ -233,14 +301,26 @@ export function ConfigurableChart({
             <YAxis {...yAxisProps} />
             <Tooltip />
             <Legend />
+            {renderReferenceLines()}
             <Area
               type="monotone"
               dataKey="value"
               name={metricLabel}
-              stroke="hsl(var(--primary))"
-              fill="hsl(var(--primary) / 0.2)"
+              stroke={localSettings.colors[0] || 'hsl(var(--primary))'}
+              fill={`${localSettings.colors[0] || 'hsl(var(--primary))'} / 0.2`}
               strokeWidth={2}
             />
+            {localSettings.showMovingAverage && (
+              <Area
+                type="monotone"
+                dataKey="movingAvg"
+                name="Moving Average"
+                stroke="hsl(var(--chart-2))"
+                fill="none"
+                strokeWidth={2}
+                strokeDasharray="5 5"
+              />
+            )}
           </AreaChart>
         );
       case 'bar':
@@ -251,7 +331,12 @@ export function ConfigurableChart({
             <YAxis {...yAxisProps} />
             <Tooltip />
             <Legend />
-            <Bar dataKey="value" name={metricLabel} fill="hsl(var(--primary))" />
+            {renderReferenceLines()}
+            <Bar
+              dataKey="value"
+              name={metricLabel}
+              fill={localSettings.colors[0] || 'hsl(var(--primary))'}
+            />
           </BarChart>
         );
       default:
@@ -262,61 +347,90 @@ export function ConfigurableChart({
             <YAxis {...yAxisProps} />
             <Tooltip />
             <Legend />
+            {renderReferenceLines()}
             <Line
               type="monotone"
               dataKey="value"
               name={metricLabel}
-              stroke="hsl(var(--primary))"
+              stroke={localSettings.colors[0] || 'hsl(var(--primary))'}
               dot={false}
               strokeWidth={2}
             />
+            {localSettings.showMovingAverage && (
+              <Line
+                type="monotone"
+                dataKey="movingAvg"
+                name="Moving Average"
+                stroke="hsl(var(--chart-2))"
+                dot={false}
+                strokeWidth={2}
+                strokeDasharray="5 5"
+              />
+            )}
           </LineChart>
         );
     }
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>{metricLabel}</CardTitle>
-            <div className="flex gap-4 mt-2 text-sm text-muted-foreground">
-              <span>Min: {stats.min.toFixed(2)}{metricUnit}</span>
-              <span>Max: {stats.max.toFixed(2)}{metricUnit}</span>
-              <span>Avg: {stats.avg.toFixed(2)}{metricUnit}</span>
+    <>
+      <Card data-chart-card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>{metricLabel}</CardTitle>
+              <div className="flex gap-4 mt-2 text-sm text-muted-foreground">
+                <span>Min: {stats.min.toFixed(2)}{metricUnit}</span>
+                <span>Max: {stats.max.toFixed(2)}{metricUnit}</span>
+                <span>Avg: {stats.avg.toFixed(2)}{metricUnit}</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {!readOnly && (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowSettings(true)}
+                    title="Chart Settings"
+                  >
+                    <Settings2 className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleExportCSV}
+                    title="Export as CSV"
+                  >
+                    <Download className="h-4 w-4" />
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm">
+                        {chartType.charAt(0).toUpperCase() + chartType.slice(1)}
+                        <ChevronDown className="ml-2 h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                      <DropdownMenuItem onClick={() => onChangeChartType('line')}>
+                        Line Chart
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => onChangeChartType('area')}>
+                        Area Chart
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => onChangeChartType('bar')}>
+                        Bar Chart
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  <Button variant="ghost" size="sm" onClick={onRemove}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            {!readOnly && (
-              <>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm">
-                      {chartType.charAt(0).toUpperCase() + chartType.slice(1)}
-                      <ChevronDown className="ml-2 h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent>
-                    <DropdownMenuItem onClick={() => onChangeChartType('line')}>
-                      Line Chart
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => onChangeChartType('area')}>
-                      Area Chart
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => onChangeChartType('bar')}>
-                      Bar Chart
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                <Button variant="ghost" size="sm" onClick={onRemove}>
-                  <X className="h-4 w-4" />
-                </Button>
-              </>
-            )}
-          </div>
-        </div>
-      </CardHeader>
+        </CardHeader>
       <CardContent>
         {loading ? (
           <div className="flex items-center justify-center h-[300px]">
@@ -341,5 +455,10 @@ export function ConfigurableChart({
         )}
       </CardContent>
     </Card>
+
+    {!readOnly && onSettingsChange && (
+      <div>Settings dialog placeholder - click settings icon</div>
+    )}
+  </>
   );
 }
