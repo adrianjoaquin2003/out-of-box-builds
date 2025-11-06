@@ -262,16 +262,16 @@ export default function ReportBuilder() {
     console.log('Before zoom:', { currentRange, maxRange, zoomDelta });
     
     // Calculate new range (limit zoom in to 0.1 seconds minimum)
-    const zoomFactor = Math.exp(zoomDelta); // Changed: removed negative sign
+    const zoomFactor = Math.exp(-zoomDelta);
     let newRange = currentRange * zoomFactor;
     
     console.log('Calculated newRange:', newRange, 'zoomFactor:', zoomFactor);
     
-    // Only clamp minimum (zoom in limit) and maximum when zooming out
-    if (newRange > maxRange) {
-      newRange = maxRange; // Can't zoom out beyond original
-    } else if (newRange < 0.1) {
+    // Clamp: prevent zooming in beyond 0.1s, allow zooming out to maxRange
+    if (newRange < 0.1) {
       newRange = 0.1; // Can't zoom in beyond 0.1 seconds
+    } else if (newRange > maxRange) {
+      newRange = maxRange; // Can't zoom out beyond original
     }
     
     console.log('After clamp:', newRange);
