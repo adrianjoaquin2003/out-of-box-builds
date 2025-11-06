@@ -268,9 +268,9 @@ export default function ReportBuilder() {
     console.log('Calculated newRange:', newRange, 'zoomFactor:', zoomFactor);
     
     // Only prevent zooming in beyond 0.1s
-    if (newRange < 0.1) {
+    /*if (newRange < 0.1) {
       newRange = 0.1;
-    }
+    }*/
     
     console.log('After clamp:', newRange);
     
