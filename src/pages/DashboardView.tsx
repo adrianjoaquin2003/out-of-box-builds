@@ -217,7 +217,7 @@ export default function DashboardView() {
     console.log('Before zoom:', { currentRange, maxRange, zoomDelta });
     
     // Calculate new range (limit zoom in to 0.1 seconds minimum)
-    const zoomFactor = Math.exp(-zoomDelta);
+    const zoomFactor = Math.exp(zoomDelta); // Changed: removed negative sign
     let newRange = currentRange * zoomFactor;
     
     console.log('Calculated newRange:', newRange, 'zoomFactor:', zoomFactor);
