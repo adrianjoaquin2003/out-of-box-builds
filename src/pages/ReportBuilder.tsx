@@ -267,7 +267,8 @@ export default function ReportBuilder() {
     
     console.log('Calculated newRange:', newRange, 'zoomFactor:', zoomFactor);
     
-    newRange = Math.max(0.1, Math.min(maxRange, newRange));
+    // Only clamp the minimum, allow zooming out beyond original
+    newRange = Math.max(0.1, newRange);
     
     console.log('After clamp:', newRange);
     
