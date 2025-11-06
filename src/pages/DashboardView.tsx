@@ -216,17 +216,17 @@ export default function DashboardView() {
     
     console.log('Before zoom:', { currentRange, maxRange, zoomDelta });
     
-    // Calculate new range (limit zoom in to 0.1 seconds minimum)
-    const zoomFactor = Math.exp(-zoomDelta);
+    // Calculate new range - scroll down (positive) = zoom out (bigger), scroll up (negative) = zoom in (smaller)
+    const zoomFactor = Math.exp(zoomDelta);
     let newRange = currentRange * zoomFactor;
     
     console.log('Calculated newRange:', newRange, 'zoomFactor:', zoomFactor);
     
     // Clamp: prevent zooming in beyond 0.1s, allow zooming out to maxRange
     if (newRange < 0.1) {
-      newRange = 0.1; // Can't zoom in beyond 0.1 seconds
+      newRange = 0.1;
     } else if (newRange > maxRange) {
-      newRange = maxRange; // Can't zoom out beyond original
+      newRange = maxRange;
     }
     
     console.log('After clamp:', newRange);
