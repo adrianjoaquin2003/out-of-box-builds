@@ -21,8 +21,23 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
+  ReferenceArea,
 } from 'recharts';
 import { ChevronDown, X, Loader2, Plus, Trash2 } from 'lucide-react';
+import {
+  ChevronDown,
+  X,
+  Loader2,
+  Plus,
+  Trash2,
+  ZoomIn,
+  ZoomOut,
+  MoveLeft,
+  MoveRight,
+  Highlighter,
+  RotateCcw,
+  Eraser,
+} from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 interface MetricConfig {
@@ -42,6 +57,8 @@ interface ConfigurableChartProps {
   timeDomain?: [number, number];
   onTimeRangeLoaded?: (min: number, max: number) => void;
   onZoom?: (center: number, zoomDelta: number) => void;
+  onPan?: (delta: number) => void;
+  onResetZoom?: () => void;
   availableMetrics?: MetricConfig[];
   onSelectMetric?: (metricKey: string) => void;
 }
@@ -65,6 +82,8 @@ export function ConfigurableChart({
   timeDomain,
   onTimeRangeLoaded,
   onZoom,
+  onPan,
+  onResetZoom,
   availableMetrics = [],
   onSelectMetric,
 }: ConfigurableChartProps) {
@@ -73,10 +92,21 @@ export function ConfigurableChart({
   const [stats, setStats] = useState<Map<string, { min: number; max: number; avg: number }>>(new Map());
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [showMetricSelector, setShowMetricSelector] = useState(false);
+  const [highlightMode, setHighlightMode] = useState(false);
+  const [highlights, setHighlights] = useState<Array<{ start: number; end: number }>>([]);
+  const [selectionStart, setSelectionStart] = useState<number | null>(null);
+  const [selectionEnd, setSelectionEnd] = useState<number | null>(null);
 
   useEffect(() => {
     fetchData();
   }, [sessionId, JSON.stringify(metrics.map(m => m.key))]);
+
+  useEffect(() => {
+    if (!highlightMode) {
+      setSelectionStart(null);
+      setSelectionEnd(null);
+    }
+  }, [highlightMode]);
 
   useEffect(() => {
     const container = chartContainerRef.current;
@@ -103,104 +133,7 @@ export function ConfigurableChart({
   }, [onZoom, timeDomain]);
 
   const fetchData = async () => {
-    try {
-      setLoading(true);
-      
-      const { data: files, error: filesError } = await supabase
-        .from('uploaded_files')
-        .select('file_path')
-        .eq('session_id', sessionId)
-        .eq('upload_status', 'processed')
-        .limit(1);
-
-      if (filesError || !files || files.length === 0) {
-        const fetchPromises = metrics.map(async (metric) => {
-          const firstBatch = supabase.rpc('sample_telemetry_data', {
-            p_session_id: sessionId,
-            p_metric: metric.key,
-            p_sample_size: 2000
-          }).range(0, 999);
-
-          const secondBatch = supabase.rpc('sample_telemetry_data', {
-            p_session_id: sessionId,
-            p_metric: metric.key,
-            p_sample_size: 2000
-          }).range(1000, 1999);
-
-          const [result1, result2] = await Promise.all([firstBatch, secondBatch]);
-          
-          if (result1.error || result2.error) {
-            return { metric: metric.key, data: [] };
-          }
-
-          const telemetry = [...(result1.data || []), ...(result2.data || [])];
-          return { metric: metric.key, data: telemetry };
-        });
-
-        const results = await Promise.all(fetchPromises);
-        
-        const mergedData = new Map<number, any>();
-        const newStats = new Map<string, { min: number; max: number; avg: number }>();
-        
-        results.forEach(({ metric, data }) => {
-          const values: number[] = [];
-          data.forEach((t: any) => {
-            const time = t.row_time;
-            if (!mergedData.has(time)) {
-              mergedData.set(time, { time });
-            }
-            mergedData.get(time)![metric] = t.row_value;
-            values.push(t.row_value);
-          });
-          
-          if (values.length > 0) {
-            newStats.set(metric, {
-              min: Math.min(...values),
-              max: Math.max(...values),
-              avg: values.reduce((a, b) => a + b, 0) / values.length,
-            });
-          }
-        });
-        
-        const sortedData = Array.from(mergedData.values()).sort((a, b) => a.time - b.time);
-        setData(sortedData);
-        setStats(newStats);
-        
-        if (sortedData.length > 0 && onTimeRangeLoaded) {
-          const times = sortedData.map(d => d.time);
-          onTimeRangeLoaded(Math.min(...times), Math.max(...times));
-        }
-        
-        setLoading(false);
-        return;
-      }
-
-      const { streamCsvMetric } = await import('@/lib/csvStreamer');
-      
-      const fetchPromises = metrics.map(metric => 
-        streamCsvMetric(files[0].file_path, metric.key, 2000)
-      );
-      
-      const results = await Promise.all(fetchPromises);
-      
-      const mergedData = new Map<number, any>();
-      const newStats = new Map<string, { min: number; max: number; avg: number }>();
-      
-      metrics.forEach((metric, index) => {
-        const metricData = results[index];
-        const values: number[] = [];
-        
-        metricData.forEach(point => {
-          if (!mergedData.has(point.time)) {
-            mergedData.set(point.time, { time: point.time });
-          }
-          mergedData.get(point.time)![metric.key] = point.value;
-          values.push(point.value);
-        });
-        
-        if (values.length > 0) {
-          newStats.set(metric.key, {
-            min: Math.min(...values),
+@@ -204,147 +233,231 @@ export function ConfigurableChart({
             max: Math.max(...values),
             avg: values.reduce((a, b) => a + b, 0) / values.length,
           });
@@ -226,6 +159,10 @@ export function ConfigurableChart({
     const commonProps = {
       data,
       margin: { top: 5, right: 30, left: 20, bottom: 5 },
+      onMouseDown: handleHighlightStart,
+      onMouseMove: handleHighlightMove,
+      onMouseUp: handleHighlightEnd,
+      onMouseLeave: handleHighlightEnd,
     };
 
     const calculateTicks = () => {
@@ -255,6 +192,40 @@ export function ConfigurableChart({
       domain: ['auto', 'auto'] as [string, string],
     };
 
+    const renderHighlights = () => {
+      const selectionRange =
+        selectionStart !== null && selectionEnd !== null
+          ? {
+              start: Math.min(selectionStart, selectionEnd),
+              end: Math.max(selectionStart, selectionEnd),
+            }
+          : null;
+
+      return (
+        <>
+          {highlights.map((range, index) => (
+            <ReferenceArea
+              key={`${range.start}-${range.end}-${index}`}
+              x1={range.start}
+              x2={range.end}
+              fill="hsl(var(--primary) / 0.12)"
+              stroke="hsl(var(--primary))"
+              strokeOpacity={0.4}
+            />
+          ))}
+          {selectionRange && (
+            <ReferenceArea
+              x1={selectionRange.start}
+              x2={selectionRange.end}
+              fill="hsl(var(--accent) / 0.18)"
+              stroke="hsl(var(--accent))"
+              strokeOpacity={0.5}
+            />
+          )}
+        </>
+      );
+    };
+
     switch (chartType) {
       case 'area':
         return (
@@ -264,6 +235,7 @@ export function ConfigurableChart({
             <YAxis {...yAxisProps} />
             <Tooltip />
             <Legend />
+            {renderHighlights()}
             {metrics.map((metric, index) => (
               <Area
                 key={metric.key}
@@ -285,6 +257,7 @@ export function ConfigurableChart({
             <YAxis {...yAxisProps} />
             <Tooltip />
             <Legend />
+            {renderHighlights()}
             {metrics.map((metric, index) => (
               <Bar 
                 key={metric.key}
@@ -303,6 +276,7 @@ export function ConfigurableChart({
             <YAxis {...yAxisProps} />
             <Tooltip />
             <Legend />
+            {renderHighlights()}
             {metrics.map((metric, index) => (
               <Line
                 key={metric.key}
@@ -322,6 +296,49 @@ export function ConfigurableChart({
   const availableToAdd = availableMetrics.filter(
     m => !metrics.find(existing => existing.key === m.key)
   );
+
+  const formatTime = (value: number) => value.toFixed(2);
+
+  const handleZoomClick = (direction: 'in' | 'out') => {
+    if (!onZoom || !timeDomain) return;
+    const center = (timeDomain[0] + timeDomain[1]) / 2;
+    const delta = direction === 'in' ? 0.35 : -0.35;
+    onZoom(center, delta);
+  };
+
+  const handlePanClick = (direction: 'left' | 'right') => {
+    if (!onPan || !timeDomain) return;
+    const range = timeDomain[1] - timeDomain[0];
+    const delta = range * 0.2 * (direction === 'left' ? -1 : 1);
+    onPan(delta);
+  };
+
+  const handleHighlightStart = (e: any) => {
+    if (!highlightMode) return;
+    if (e?.activeLabel == null) return;
+    setSelectionStart(e.activeLabel);
+    setSelectionEnd(e.activeLabel);
+  };
+
+  const handleHighlightMove = (e: any) => {
+    if (!highlightMode || selectionStart === null) return;
+    if (e?.activeLabel == null) return;
+    setSelectionEnd(e.activeLabel);
+  };
+
+  const handleHighlightEnd = () => {
+    if (!highlightMode || selectionStart === null || selectionEnd === null) return;
+    if (selectionStart === selectionEnd) {
+      setSelectionStart(null);
+      setSelectionEnd(null);
+      return;
+    }
+    const start = Math.min(selectionStart, selectionEnd);
+    const end = Math.max(selectionStart, selectionEnd);
+    setHighlights((prev) => [...prev, { start, end }]);
+    setSelectionStart(null);
+    setSelectionEnd(null);
+  };
 
   return (
     <Card data-chart-container>
@@ -348,46 +365,7 @@ export function ConfigurableChart({
                     )}
                     {!readOnly && metrics.length > 1 && (
                       <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-6 w-6 p-0"
-                        onClick={() => onRemoveMetric(metric.key)}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {!readOnly && (
-              <>
-                {availableToAdd.length > 0 && onSelectMetric && (
-                  <DropdownMenu open={showMetricSelector} onOpenChange={setShowMetricSelector}>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="sm">
-                        <Plus className="h-4 w-4 mr-1" />
-                        Add Metric
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="max-h-64 overflow-y-auto">
-                      {availableToAdd.map(metric => (
-                        <DropdownMenuItem 
-                          key={metric.key}
-                          onClick={() => {
-                            onSelectMetric(metric.key);
-                            setShowMetricSelector(false);
-                          }}
-                        >
-                          {metric.label}
-                        </DropdownMenuItem>
-                      ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
-                <DropdownMenu>
+@@ -391,52 +504,109 @@ export function ConfigurableChart({
                   <DropdownMenuTrigger asChild>
                     <Button variant="outline" size="sm">
                       {chartType.charAt(0).toUpperCase() + chartType.slice(1)}
@@ -413,6 +391,54 @@ export function ConfigurableChart({
             )}
           </div>
         </div>
+        <div className="flex flex-wrap items-center gap-2 pt-3">
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => handleZoomClick('out')} disabled={!onZoom || !timeDomain}>
+              <ZoomOut className="h-4 w-4 mr-1" />
+              Zoom Out
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => handleZoomClick('in')} disabled={!onZoom || !timeDomain}>
+              <ZoomIn className="h-4 w-4 mr-1" />
+              Zoom In
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => handlePanClick('left')} disabled={!onPan || !timeDomain}>
+              <MoveLeft className="h-4 w-4 mr-1" />
+              Pan Left
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => handlePanClick('right')} disabled={!onPan || !timeDomain}>
+              <MoveRight className="h-4 w-4 mr-1" />
+              Pan Right
+            </Button>
+            {onResetZoom && (
+              <Button variant="outline" size="sm" onClick={onResetZoom} disabled={!timeDomain}>
+                <RotateCcw className="h-4 w-4 mr-1" />
+                Reset
+              </Button>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant={highlightMode ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setHighlightMode((prev) => !prev)}
+            >
+              <Highlighter className="h-4 w-4 mr-1" />
+              {highlightMode ? 'Highlighting' : 'Highlight'}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setHighlights([])}
+              disabled={highlights.length === 0}
+            >
+              <Eraser className="h-4 w-4 mr-1" />
+              Clear Highlights
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Scroll horizontally to explore. Use zoom/pan to scale the timeline. Toggle highlight to drag over segments.
+          </p>
+        </div>
       </CardHeader>
       <CardContent>
         {loading ? (
@@ -427,6 +453,7 @@ export function ConfigurableChart({
           <div 
             ref={chartContainerRef}
             className="overflow-x-auto cursor-zoom-in"
+            className={`overflow-x-auto ${highlightMode ? 'cursor-crosshair' : 'cursor-zoom-in'}`}
             style={{ userSelect: 'none' }}
           >
             <div style={{ minWidth: timeDomain ? (timeDomain[1] - timeDomain[0]) * 4 : Math.max(800, data.length * 1.5) + 'px' }}>
@@ -434,6 +461,15 @@ export function ConfigurableChart({
                 {renderChart()}
               </ResponsiveContainer>
             </div>
+            {highlights.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-3">
+                {highlights.map((range, index) => (
+                  <Badge key={`${range.start}-${range.end}-${index}`} variant="secondary" className="text-xs">
+                    {formatTime(range.start)}s → {formatTime(range.end)}s
+                  </Badge>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </CardContent>
